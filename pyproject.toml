@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "climara"
+version = "0.1.0"
+description = "Climate diagnostics and scientific plotting in Python."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "yangzhenyu"}]
+dependencies = [
+    "numpy",
+    "pandas",
+    "xarray",
+    "dask",
+    "netCDF4",
+    "h5netcdf",
+    "pyyaml",
+    "matplotlib",
+    "cartopy",
+    "scipy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipykernel",
+    "jupyter",
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+climara = [
+    "resources/colormaps/*.rgb",
+]
