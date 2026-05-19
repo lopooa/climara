@@ -2,10 +2,11 @@
 
 Climate diagnostics and scientific plotting in Python.
 
-`climara` is being developed as a pure-Python NCL-style scientific plotting layer.  
-The goal is not to call NCL, but to learn from NCL's plotting design and translate its ideas into Python.
+`climara` is a pure-Python NCL-style scientific plotting layer built on Matplotlib, Cartopy, NumPy, and xarray.
 
-## Current plotting design
+The goal is not to call NCL directly, but to learn from NCL's plotting design and translate its ideas into Python.
+
+## Features
 
 `climara.plotting` currently supports:
 
@@ -14,7 +15,7 @@ The goal is not to call NCL, but to learn from NCL's plotting design and transla
 - `gsn_csm_contour_map_polar`
 - `gsn_panel`
 - NCL-style labelbar controls
-- map projection controls using Cartopy
+- Cartopy map projections
 - contour / pcolormesh fill modes
 - overlay layers
 - hatching and stippling
@@ -22,16 +23,35 @@ The goal is not to call NCL, but to learn from NCL's plotting design and transla
 - workstation-like frame saving
 - object-oriented plotting workflow
 
+## Installation
+
+Install from GitHub:
+
+```bash
+pip install git+https://github.com/lopooa/climara.git@v0.1.0
+```
+
+For local development:
+
+```bash
+git clone https://github.com/lopooa/climara.git
+cd climara
+pip install -e .
+```
+
 ## Basic example
 
 ```python
 import numpy as np
+
 from climara.plotting import ncl_style, gsn_csm_contour_map
+
 
 ncl_style()
 
 lon = np.linspace(0, 357.5, 144)
 lat = np.linspace(-90, 90, 73)
+
 lon2d, lat2d = np.meshgrid(lon, lat)
 
 data = (
@@ -63,17 +83,37 @@ res = {
 }
 
 fig, ax, out = gsn_csm_contour_map(data, lon=lon, lat=lat, res=res)
-fig.savefig("example.png", bbox_inches="tight")cd /mnt/d/Projects/climara
 
-python - <<'PY'
-from pathlib import Path
-import re
+fig.savefig("example.png", bbox_inches="tight", dpi=300)
+```
 
-p = Path("pyproject.toml")
-text = p.read_text()
-text = re.sub(r'version = ".*?"', 'version = "0.1.0"', text)
-p.write_text(text)
-PY
+## Object-style workflow
 
-cat > src/climara/_version.py <<'EOF'
-__version__ = "0.1.0"
+```python
+from climara.plotting import ScalarField, ContourMapPlot
+
+
+field = ScalarField(data=data, lon=lon, lat=lat, name="demo_field")
+
+plot = ContourMapPlot(field, res=res)
+
+plot.save("object_example.png")
+```
+
+## NCL-style design
+
+| NCL concept | climara concept |
+|---|---|
+| workstation | `NclWorkstation`, `gsn_open_wks()` |
+| resource list | Python dictionary |
+| scalarFieldClass | `ScalarField` |
+| contourPlotClass | `ContourMapPlot` |
+| gsn_csm_contour_map | `gsn_csm_contour_map()` |
+| gsn_panel | `gsn_panel()` |
+| overlay | `overlay_*()` and `OverlayLayer` |
+
+## Development status
+
+Current version: `v0.1.0`
+
+This package is experimental and under active development.
