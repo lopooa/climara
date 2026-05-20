@@ -28,7 +28,7 @@ The goal is not to call NCL directly, but to learn from NCL's plotting design an
 Install from GitHub:
 
 ```bash
-pip install git+https://github.com/lopooa/climara.git@v0.3.4
+pip install git+https://github.com/lopooa/climara.git@v0.3.5
 ```
 
 For local development:
@@ -114,6 +114,6 @@ plot.save("object_example.png")
 
 ## Development status
 
-Current version: `v0.3.4`
+Current version: `v0.3.5`
 
 This package is experimental and under active development.
