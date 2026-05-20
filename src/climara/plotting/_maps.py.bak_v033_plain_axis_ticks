@@ -418,50 +418,6 @@ def _apply_perimeter(ax, mpres):
                 pass
 
 
-
-def _clear_plain_axis_ticks(ax):
-    try:
-        ax.set_xticks([])
-        ax.set_yticks([])
-    except Exception:
-        pass
-
-    try:
-        ax.tick_params(
-            bottom=False,
-            top=False,
-            left=False,
-            right=False,
-            labelbottom=False,
-            labeltop=False,
-            labelleft=False,
-            labelright=False,
-        )
-    except Exception:
-        pass
-
-    try:
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-    except Exception:
-        labels = []
-
-    for label in labels:
-        try:
-            label.set_visible(False)
-        except Exception:
-            pass
-
-
-def _should_apply_plain_axis_ticks(mpres):
-    if "tmPlainAxisTicksOn" in mpres:
-        return bool_resource(mpres, "tmPlainAxisTicksOn", True)
-
-    if _is_curved_global_projection(mpres):
-        if not bool_resource(mpres, "mpGridLabelsOn", False):
-            return False
-
-    return True
-
 def add_map_features(ax, mpres: dict | None = None):
     if mpres is None:
         mpres = {}
@@ -560,11 +516,7 @@ def add_map_features(ax, mpres: dict | None = None):
         apply_gridliner_labels(gl, mpres)
 
     _apply_perimeter(ax, mpres)
-
-    if _should_apply_plain_axis_ticks(mpres):
-        apply_plain_axis_ticks(ax, mpres)
-    else:
-        _clear_plain_axis_ticks(ax)
+    apply_plain_axis_ticks(ax, mpres)
 
     return {
         "fill_artists": fill_artists,

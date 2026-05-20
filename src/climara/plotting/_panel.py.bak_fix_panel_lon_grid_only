@@ -265,10 +265,9 @@ def _trim_inner_panel_lon_tick_values(res, col, ncols, panel_res):
     if col < ncols - 1:
         values = _drop_nearest_boundary_value(values, "right")
 
-    # 这里只裁剪 Cartopy gridliner 的经度标签。
-    # 不要写 tmXBValues / tmXTValues，否则 Matplotlib 轴刻度会和
-    # Cartopy 经纬度标签同时出现，导致底部标签叠加、顶部 tick 冒出来。
     res["mpGridLonValues"] = values
+    res["tmXBValues"] = values
+    res["tmXTValues"] = values
 
     return res
 

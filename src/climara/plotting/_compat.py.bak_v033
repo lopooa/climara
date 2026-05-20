@@ -625,28 +625,6 @@ SUPPORTED_RESOURCES = [
         "file": "_contour.py",
         "notes": "Adds safe fallback behavior for constant fields.",
     },
-
-    {
-        "group": "MapPlot",
-        "resource": "LambertAzimuthalEqualArea / AzimuthalEquidistant / TransverseMercator",
-        "status": "partial",
-        "file": "_maps.py",
-        "notes": "Adds more Cartopy projection aliases using NCL-style mpProjection names.",
-    },
-    {
-        "group": "MapPlot",
-        "resource": "mpCoastlineOn / mpLakeLineOn / mpRiverLineOn / mpUSStateLineOn",
-        "status": "yes",
-        "file": "_maps.py",
-        "notes": "Adds more map outline and boundary controls.",
-    },
-    {
-        "group": "MapPlot",
-        "resource": "mpLandFillColor / mpOceanFillColor / mpInlandWaterFillColor",
-        "status": "yes",
-        "file": "_maps.py",
-        "notes": "Improves NCL-style land, ocean, and inland water fill controls.",
-    },
 ]
 
 

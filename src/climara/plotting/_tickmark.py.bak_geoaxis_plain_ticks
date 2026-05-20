@@ -209,55 +209,6 @@ def build_grid_locators(res):
     return xlocs, ylocs
 
 
-
-def _disable_gridliner_labels(gl):
-    if gl is None:
-        return None
-
-    names = [
-        "bottom_labels",
-        "top_labels",
-        "left_labels",
-        "right_labels",
-        "xlabels_bottom",
-        "xlabels_top",
-        "ylabels_left",
-        "ylabels_right",
-    ]
-
-    for name in names:
-        try:
-            setattr(gl, name, False)
-        except Exception:
-            pass
-
-    artist_names = [
-        "label_artists",
-        "xlabel_artists",
-        "ylabel_artists",
-        "top_label_artists",
-        "bottom_label_artists",
-        "left_label_artists",
-        "right_label_artists",
-    ]
-
-    for name in artist_names:
-        artists = getattr(gl, name, None)
-
-        if artists is None:
-            continue
-
-        if not isinstance(artists, (list, tuple)):
-            artists = [artists]
-
-        for artist in artists:
-            try:
-                artist.set_visible(False)
-            except Exception:
-                pass
-
-    return gl
-
 def apply_gridliner_labels(gl, res):
     """
     Apply NCL-style tickmark resources to Cartopy gridliner.
@@ -269,9 +220,6 @@ def apply_gridliner_labels(gl, res):
     """
     if gl is None:
         return None
-
-    if "mpGridLabelsOn" in res and not bool_resource(res, "mpGridLabelsOn", False):
-        return _disable_gridliner_labels(gl)
 
     gl.bottom_labels = _label_on(
         res,
@@ -365,67 +313,11 @@ def _set_axis_label_style(labels, res, side, axis):
             label.set_clip_on(True)
 
 
-
-def _is_geoaxes(ax):
-    return hasattr(ax, "projection")
-
-
-def _clear_plain_axis_ticks(ax):
-    try:
-        import matplotlib.ticker as mticker
-        ax.xaxis.set_major_locator(mticker.NullLocator())
-        ax.yaxis.set_major_locator(mticker.NullLocator())
-        ax.xaxis.set_minor_locator(mticker.NullLocator())
-        ax.yaxis.set_minor_locator(mticker.NullLocator())
-    except Exception:
-        pass
-
-    try:
-        ax.set_xticks([])
-        ax.set_yticks([])
-    except Exception:
-        pass
-
-    try:
-        ax.tick_params(
-            bottom=False,
-            top=False,
-            left=False,
-            right=False,
-            labelbottom=False,
-            labeltop=False,
-            labelleft=False,
-            labelright=False,
-        )
-    except Exception:
-        pass
-
-    try:
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-    except Exception:
-        labels = []
-
-    for label in labels:
-        try:
-            label.set_visible(False)
-        except Exception:
-            pass
-
-    try:
-        ax.xaxis.set_visible(False)
-        ax.yaxis.set_visible(False)
-    except Exception:
-        pass
-
 def apply_plain_axis_ticks(ax, res):
     """
     Apply tick controls for plain Matplotlib axes.
-    For GeoAxes, longitude/latitude labels should be handled by Cartopy gridliner.
+    For GeoAxes, most tick labels are handled by gridliner.
     """
-    if _is_geoaxes(ax) and not bool_resource(res, "tmPlainAxisTicksOn", False):
-        _clear_plain_axis_ticks(ax)
-        return ax
-
     if not bool_resource(res, "tmBorderOn", True):
         for spine in getattr(ax, "spines", {}).values():
             spine.set_visible(False)

@@ -596,57 +596,6 @@ SUPPORTED_RESOURCES = [
         "file": "_tickmark.py",
         "notes": "Clips tick labels to reduce overflow around panel edges.",
     },
-
-    {
-        "group": "ContourPlot",
-        "resource": "cnFillMode = Auto / Contourf / AreaFill / RasterFill / CellFill",
-        "status": "partial",
-        "file": "_contour.py",
-        "notes": "Auto path tries contourf-style fill and can fall back to pcolormesh.",
-    },
-    {
-        "group": "ContourPlot",
-        "resource": "cnLineLabelsOn / cnLineLabelInterval / cnLineLabelFormat",
-        "status": "yes",
-        "file": "_contour.py",
-        "notes": "Adds Matplotlib clabel support for NCL-style contour line labels.",
-    },
-    {
-        "group": "ContourPlot",
-        "resource": "cnInfoLabelOn / cnInfoLabelString",
-        "status": "yes",
-        "file": "_contour.py",
-        "notes": "Adds simple info label with automatic min/max/interval text.",
-    },
-    {
-        "group": "ContourPlot",
-        "resource": "cnConstantFieldMode / cnConstFLabelOn",
-        "status": "yes",
-        "file": "_contour.py",
-        "notes": "Adds safe fallback behavior for constant fields.",
-    },
-
-    {
-        "group": "MapPlot",
-        "resource": "LambertAzimuthalEqualArea / AzimuthalEquidistant / TransverseMercator",
-        "status": "partial",
-        "file": "_maps.py",
-        "notes": "Adds more Cartopy projection aliases using NCL-style mpProjection names.",
-    },
-    {
-        "group": "MapPlot",
-        "resource": "mpCoastlineOn / mpLakeLineOn / mpRiverLineOn / mpUSStateLineOn",
-        "status": "yes",
-        "file": "_maps.py",
-        "notes": "Adds more map outline and boundary controls.",
-    },
-    {
-        "group": "MapPlot",
-        "resource": "mpLandFillColor / mpOceanFillColor / mpInlandWaterFillColor",
-        "status": "yes",
-        "file": "_maps.py",
-        "notes": "Improves NCL-style land, ocean, and inland water fill controls.",
-    },
 ]
 
 

@@ -121,4 +121,3 @@ __all__ = [
     "gsn_panel",
     "gsn_panel_maps",
 ]
-from ._ncl_resources import print_projection_aliases, print_resource_groups, projection_aliases, resource_groups

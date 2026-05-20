@@ -178,101 +178,6 @@ def _panel_labelbar_rect(fig, axes, panel_res, lbres, pmres):
     return [left, bottom, width, height]
 
 
-def _as_float_list(values):
-    if values is None:
-        return None
-
-    if isinstance(values, str):
-        values = values.replace(",", " ").split()
-
-    try:
-        return [float(v) for v in values]
-    except TypeError:
-        return [float(values)]
-
-
-def _values_from_spacing(vmin, vmax, spacing):
-    spacing = float(spacing)
-
-    if spacing <= 0:
-        return None
-
-    start = math.ceil(vmin / spacing) * spacing
-    values = []
-    value = start
-
-    while value <= vmax + spacing * 0.25:
-        if value >= vmin - spacing * 0.25:
-            values.append(float(value))
-        value += spacing
-
-    return values
-
-
-def _panel_lon_tick_values(res):
-    values = _as_float_list(
-        res.get(
-            "tmXBValues",
-            res.get(
-                "tmXTValues",
-                res.get("mpGridLonValues", None),
-            ),
-        )
-    )
-
-    if values is not None:
-        return values
-
-    spacing = res.get("mpGridLonSpacingF", res.get("mpGridSpacingF", None))
-
-    if spacing is None:
-        return None
-
-    vmin = float(res.get("mpMinLonF", -180.0))
-    vmax = float(res.get("mpMaxLonF", 180.0))
-
-    return _values_from_spacing(vmin, vmax, spacing)
-
-
-def _drop_nearest_boundary_value(values, side):
-    if values is None or len(values) == 0:
-        return values
-
-    values = [float(v) for v in values]
-
-    if side == "left":
-        target = min(values)
-    elif side == "right":
-        target = max(values)
-    else:
-        return values
-
-    return [v for v in values if abs(v - target) > 1e-8]
-
-
-def _trim_inner_panel_lon_tick_values(res, col, ncols, panel_res):
-    if not bool_resource(panel_res, "gsnPanelTrimInnerEdgeLonLabels", True):
-        return res
-
-    values = _panel_lon_tick_values(res)
-
-    if values is None:
-        return res
-
-    if col > 0:
-        values = _drop_nearest_boundary_value(values, "left")
-
-    if col < ncols - 1:
-        values = _drop_nearest_boundary_value(values, "right")
-
-    # 这里只裁剪 Cartopy gridliner 的经度标签。
-    # 不要写 tmXBValues / tmXTValues，否则 Matplotlib 轴刻度会和
-    # Cartopy 经纬度标签同时出现，导致底部标签叠加、顶部 tick 冒出来。
-    res["mpGridLonValues"] = values
-
-    return res
-
-
 def _set_panel_tick_policy(res, i, ncols, nrows, panel_res):
     if not bool_resource(panel_res, "gsnPanelAutoTickLabels", True):
         return res
@@ -295,9 +200,8 @@ def _set_panel_tick_policy(res, i, ncols, nrows, panel_res):
     res["mpGridBottomLabelsOn"] = bottom_on
     res["mpGridTopLabelsOn"] = top_on
 
-    res = _trim_inner_panel_lon_tick_values(res, col, ncols, panel_res)
-
     return res
+
 
 
 def _iter_gridliner_label_artists(gl):

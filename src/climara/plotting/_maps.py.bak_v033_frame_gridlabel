@@ -291,37 +291,6 @@ def set_map_extent(ax, mpres: dict | None = None):
         pass
 
 
-
-def _is_curved_global_projection(mpres):
-    key = _projection_key(mpres.get("mpProjection", ""))
-
-    curved = {
-        "robinson",
-        "mollweide",
-        "orthographic",
-        "interruptedgoodehomolosine",
-        "equalearth",
-        "sinusoidal",
-        "nearsideperspective",
-        "geostationary",
-    }
-
-    if key in curved:
-        return True
-
-    return False
-
-
-def _safe_grid_draw_labels(mpres):
-    if not bool_resource(mpres, "mpGridLabelsOn", False):
-        return False
-
-    if bool_resource(mpres, "mpGridLabelsAutoOffForCurvedGlobal", True):
-        if _is_curved_global_projection(mpres):
-            return False
-
-    return True
-
 def _feature_with_scale(feature, resolution):
     try:
         return feature.with_scale(resolution)
@@ -387,21 +356,15 @@ def _apply_map_fill(ax, mpres):
 def _apply_perimeter(ax, mpres):
     perim_on = bool_resource(mpres, "mpPerimOn", True)
 
-    hide_rect_frame = bool_resource(mpres, "mpHideRectangularFrameForCurvedGlobal", True)
-    hide_rect_frame = hide_rect_frame and _is_curved_global_projection(mpres)
-
     for attr in ["outline_patch", "background_patch"]:
         try:
             getattr(ax, attr).set_visible(perim_on)
         except Exception:
             pass
 
-    for name, spine in getattr(ax, "spines", {}).items():
+    for spine in getattr(ax, "spines", {}).values():
         try:
-            if hide_rect_frame and name != "geo":
-                spine.set_visible(False)
-            else:
-                spine.set_visible(perim_on)
+            spine.set_visible(perim_on)
         except Exception:
             pass
 
@@ -417,50 +380,6 @@ def _apply_perimeter(ax, mpres):
             except Exception:
                 pass
 
-
-
-def _clear_plain_axis_ticks(ax):
-    try:
-        ax.set_xticks([])
-        ax.set_yticks([])
-    except Exception:
-        pass
-
-    try:
-        ax.tick_params(
-            bottom=False,
-            top=False,
-            left=False,
-            right=False,
-            labelbottom=False,
-            labeltop=False,
-            labelleft=False,
-            labelright=False,
-        )
-    except Exception:
-        pass
-
-    try:
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-    except Exception:
-        labels = []
-
-    for label in labels:
-        try:
-            label.set_visible(False)
-        except Exception:
-            pass
-
-
-def _should_apply_plain_axis_ticks(mpres):
-    if "tmPlainAxisTicksOn" in mpres:
-        return bool_resource(mpres, "tmPlainAxisTicksOn", True)
-
-    if _is_curved_global_projection(mpres):
-        if not bool_resource(mpres, "mpGridLabelsOn", False):
-            return False
-
-    return True
 
 def add_map_features(ax, mpres: dict | None = None):
     if mpres is None:
@@ -547,7 +466,7 @@ def add_map_features(ax, mpres: dict | None = None):
 
         gl = ax.gridlines(
             crs=ccrs.PlateCarree(),
-            draw_labels=_safe_grid_draw_labels(mpres),
+            draw_labels=bool_resource(mpres, "mpGridLabelsOn", False),
             linewidth=_float(mpres, "mpGridLineThicknessF", 0.4),
             color=mpres.get("mpGridLineColor", "0.6"),
             alpha=_float(mpres, "mpGridLineAlphaF", 0.6),
@@ -560,11 +479,7 @@ def add_map_features(ax, mpres: dict | None = None):
         apply_gridliner_labels(gl, mpres)
 
     _apply_perimeter(ax, mpres)
-
-    if _should_apply_plain_axis_ticks(mpres):
-        apply_plain_axis_ticks(ax, mpres)
-    else:
-        _clear_plain_axis_ticks(ax)
+    apply_plain_axis_ticks(ax, mpres)
 
     return {
         "fill_artists": fill_artists,
