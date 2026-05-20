@@ -1,7 +1,7 @@
 def test_climara_import():
     import climara
 
-    assert climara.__version__ == "0.3.5"
+    assert climara.__version__ == "0.1.1"
 
 
 def test_plotting_imports():
