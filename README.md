@@ -51,7 +51,7 @@
 
 ### Panel / LabelBar / TickMark
 
-![panel labelbar tickmark](docs/assets/panel_labelbar_tickmark.png)
+![panel labelbar tickmark](assets/panel_labelbar_tickmark.png)
 
 这个示例展示：
 
@@ -81,7 +81,7 @@
 
 ### Robinson projection
 
-![projection robinson](docs/assets/projection_robinson.png)
+![projection robinson](assets/projection_robinson.png)
 
 ### Orthographic projection
 

@@ -33,3 +33,24 @@ venv/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# local docs and helper scripts
+docs/
+scripts/
+
+# temporary files
+*.bak*
+*_draft*
+apply_*.sh
+examples.txt
+版本号含义.txt
+
+# generated images in project root
+demo_*.png
+quick_start.png
+object_example.png
+
+# build artifacts
+dist/
+build/
+*.egg-info/
