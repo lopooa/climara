@@ -7,7 +7,7 @@ It is inspired by the concise, resource-based plotting style of NCL, and aims to
 The package currently supports both dictionary-style plotting resources and object-oriented plotting workflows.
 
 <p align="center">
-  <img src="assets/projection_robinson.png" width="720">
+  <img src="assets/projection_platecarree.png" width="720">
 </p>
 
 The figure above is a global surface-field example drawn with `climara`.
