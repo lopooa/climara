@@ -7,6 +7,7 @@ from ._contour import ncl_contour_map
 from ._labelbar import add_labelbar
 from ._maps import create_projection
 from ._resources import bool_resource, split_resources
+from ._workflow import apply_gsn_workflow
 
 
 def _copy_res_without_labelbar(res):
@@ -560,6 +561,7 @@ def ncl_panel_maps(
     ncols=2,
     figsize=None,
     common_labelbar=True,
+    wks=None,
 ):
     groups = split_resources(res)
     panel_res = groups["gsn"]
@@ -583,6 +585,8 @@ def ncl_panel_maps(
     results = []
 
     plot_res = _copy_res_without_labelbar(res)
+    plot_res["gsnFrame"] = False
+
 
     for i, data in enumerate(data_list):
         projection = create_projection(mpres)
@@ -649,20 +653,20 @@ def ncl_panel_maps(
             y=float(panel_res.get("gsnPanelMainYF", 0.98)),
         )
 
-    if bool_resource(panel_res, "gsnFrame", False):
-        filename = panel_res.get("gsnFrameFileName", None)
-
-        if filename is not None:
-            fig.savefig(
-                filename,
-                dpi=int(panel_res.get("gsnFrameDpi", 300)),
-                bbox_inches=panel_res.get("gsnFrameBBoxInches", "tight"),
-            )
-
-    return fig, axes, {
+    out = {
         "panel_results": results,
         "colorbar": cbar,
         "figure_string_artists": figure_string_artists,
         "title_artists": title_artists,
         "groups": groups,
     }
+
+    fig, _, out = apply_gsn_workflow(
+        fig,
+        ax=None,
+        out=out,
+        gsnres=panel_res,
+        wks=wks,
+    )
+
+    return fig, axes, out

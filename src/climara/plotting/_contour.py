@@ -10,7 +10,8 @@ from ._labelbar import add_labelbar
 from ._maps import create_map_axes
 from ._resources import bool_resource, resolve_contour_levels, split_resources
 from ._strings import add_gsn_strings
-from ._utils import maybe_add_cyclic, mesh_lon_lat, to_numpy_data_lon_lat
+from ._utils import maybe_add_cyclic, mesh_lon_lat
+from ._workflow import apply_gsn_workflow
 
 
 _DASH_MAP = {
@@ -28,25 +29,146 @@ _DASH_MAP = {
 }
 
 
+def _get_coord(data, names):
+    if not hasattr(data, "coords"):
+        return None
+
+    for name in names:
+        if name in data.coords:
+            return np.asarray(data.coords[name])
+
+    return None
+
+
+def _prepare_contour_data(data, lon=None, lat=None):
+    arr = getattr(data, "values", data)
+    arr = np.asarray(arr, dtype=float)
+    arr = np.squeeze(arr)
+
+    if arr.ndim != 2:
+        raise ValueError(
+            f"ContourPlot only supports 2-D data after squeeze, got shape {arr.shape}"
+        )
+
+    if lon is None:
+        lon = _get_coord(data, ["lon", "longitude", "x"])
+
+    if lat is None:
+        lat = _get_coord(data, ["lat", "latitude", "y"])
+
+    if lon is None:
+        lon = np.arange(arr.shape[1], dtype=float)
+
+    if lat is None:
+        lat = np.arange(arr.shape[0], dtype=float)
+
+    lon = np.asarray(lon, dtype=float)
+    lat = np.asarray(lat, dtype=float)
+
+    arr = np.ma.masked_invalid(arr)
+
+    return arr, lon, lat
+
+
+def _finite_minmax(arr):
+    values = np.asarray(arr, dtype=float)
+    finite = values[np.isfinite(values)]
+
+    if finite.size == 0:
+        return None, None, True
+
+    vmin = float(finite.min())
+    vmax = float(finite.max())
+    is_constant = bool(np.isclose(vmin, vmax))
+
+    return vmin, vmax, is_constant
+
+
+def _as_float_list(values):
+    if values is None:
+        return None
+
+    if isinstance(values, str):
+        values = values.replace(",", " ").split()
+
+    try:
+        return [float(v) for v in values]
+    except TypeError:
+        return [float(values)]
+
+
+def _build_contour_levels(arr, cnres):
+    cnres = dict(cnres or {})
+    vmin, vmax, is_constant = _finite_minmax(arr)
+
+    resolved = resolve_contour_levels(cnres)
+
+    if resolved is not None and len(resolved) >= 2:
+        return np.asarray(resolved, dtype=float), is_constant
+
+    explicit = _as_float_list(cnres.get("cnExplicitLevels", None))
+
+    if explicit is not None and len(explicit) >= 2:
+        return np.asarray(explicit, dtype=float), is_constant
+
+    if vmin is None or vmax is None:
+        return np.asarray([0.0, 1.0], dtype=float), True
+
+    if is_constant:
+        center = vmin
+        width = abs(center) * 0.05
+
+        if width == 0:
+            width = 1.0
+
+        spacing = float(cnres.get("cnLevelSpacingF", width / 2.0))
+        lo = float(cnres.get("cnMinLevelValF", center - width))
+        hi = float(cnres.get("cnMaxLevelValF", center + width))
+
+        if spacing <= 0:
+            spacing = width / 2.0
+
+        if lo == hi:
+            lo = center - width
+            hi = center + width
+
+        levels = np.arange(lo, hi + spacing * 0.5, spacing, dtype=float)
+
+        if levels.size < 2:
+            levels = np.asarray([center - width, center + width], dtype=float)
+
+        return levels, True
+
+    count = max(3, int(cnres.get("cnMaxLevelCount", 11)))
+    levels = np.linspace(vmin, vmax, count, dtype=float)
+
+    if levels.size < 2:
+        levels = np.asarray([vmin, vmax], dtype=float)
+
+    return levels, False
+
+
 def _normalize_extend(value):
     if value is None:
         return "both"
 
     value = str(value).lower()
 
-    mapping = {
+    aliases = {
         "both": "both",
         "true": "both",
+        "minmax": "both",
         "neither": "neither",
         "none": "neither",
         "false": "neither",
+        "no": "neither",
         "min": "min",
         "lower": "min",
         "max": "max",
         "upper": "max",
     }
 
-    return mapping.get(value, "both")
+    return aliases.get(value, "both")
 
 
 def _needed_color_count(levels, extend):
@@ -82,9 +204,16 @@ def _get_fill_cmap(cnres, levels, extend):
     fill_colors = cnres.get("cnFillColors", None)
 
     if fill_colors is not None:
-        cmap = ListedColormap(fill_colors, name="climara_cnFillColors")
+        cmap = ListedColormap(list(fill_colors), name="climara_cnFillColors")
     else:
-        cmap = get_colormap(cnres.get("cnFillPalette", "viridis"))
+        palette = cnres.get("cnFillPalette", "viridis")
+
+        try:
+            cmap = get_colormap(palette)
+        except Exception:
+            import matplotlib.pyplot as plt
+
+            cmap = plt.get_cmap(palette)
 
     missing = cnres.get("cnMissingValFillColor", None)
 
@@ -145,10 +274,10 @@ def _smooth_field(arr, cnres):
     except Exception:
         return arr
 
-    arr = np.asarray(arr, dtype=float)
-    mask = np.isfinite(arr)
+    values = np.asarray(arr, dtype=float)
+    mask = np.isfinite(values)
 
-    filled = np.where(mask, arr, 0.0)
+    filled = np.where(mask, values, 0.0)
     weight = mask.astype(float)
 
     smooth_filled = gaussian_filter(filled, sigma=sigma, mode="nearest")
@@ -159,31 +288,208 @@ def _smooth_field(arr, cnres):
 
     out[smooth_weight <= 0] = np.nan
 
-    return out
+    return np.ma.masked_invalid(out)
 
 
-def _is_constant_field(arr):
-    finite = np.asarray(arr)[np.isfinite(arr)]
-
-    if finite.size == 0:
-        return False, np.nan
-
-    vmin = np.nanmin(finite)
-    vmax = np.nanmax(finite)
-
-    return bool(np.isclose(vmin, vmax)), float(vmin)
+def _is_geoaxes(ax):
+    return hasattr(ax, "projection")
 
 
-def _add_const_label(ax, value, cnres):
+def _data_transform(ax):
+    if _is_geoaxes(ax):
+        return ccrs.PlateCarree()
+
+    return None
+
+
+def _normalize_fill_mode(cnres):
+    mode = str(cnres.get("cnFillMode", "AreaFill"))
+    key = mode.replace("_", "").replace("-", "").replace(" ", "").lower()
+
+    if key in ["rasterfill", "cellfill", "pcolorfill", "pcolormesh"]:
+        return "pcolormesh"
+
+    if key in ["contourf", "areafill", "area", "auto"]:
+        return "contourf"
+
+    return "contourf"
+
+
+def _pcolormesh_shading(cnres):
+    if "cnPcolormeshShading" in cnres:
+        return cnres["cnPcolormeshShading"]
+
+    if bool_resource(cnres, "cnRasterSmoothingOn", False):
+        return "gouraud"
+
+    return "auto"
+
+
+def _draw_contour_fill(
+    ax,
+    lon,
+    lat,
+    arr,
+    levels,
+    cnres,
+    cmap,
+    norm,
+    extend,
+    is_constant,
+):
+    if not bool_resource(cnres, "cnFillOn", True):
+        return None, None
+
+    mode = _normalize_fill_mode(cnres)
+    transform = _data_transform(ax)
+
+    kwargs = {
+        "cmap": cmap,
+        "norm": norm,
+        "zorder": float(cnres.get("cnFillZOrder", 3)),
+    }
+
+    if transform is not None:
+        kwargs["transform"] = transform
+
+    if is_constant:
+        constant_mode = str(cnres.get("cnConstantFieldMode", "Fill")).lower()
+
+        if constant_mode in ["skip", "none", "off"]:
+            return None, None
+
+        mode = "pcolormesh"
+
+    if mode == "pcolormesh":
+        lon2d, lat2d = mesh_lon_lat(lon, lat)
+
+        mappable = ax.pcolormesh(
+            lon2d,
+            lat2d,
+            arr,
+            shading=_pcolormesh_shading(cnres),
+            edgecolors=cnres.get("cnCellFillEdgeColor", "none"),
+            linewidth=float(cnres.get("cnCellFillEdgeThicknessF", 0.0)),
+            **kwargs,
+        )
+
+        return mappable, "pcolormesh"
+
+    try:
+        mappable = ax.contourf(
+            lon,
+            lat,
+            arr,
+            levels=levels,
+            extend=extend,
+            **kwargs,
+        )
+
+        return mappable, "contourf"
+
+    except Exception:
+        fallback = str(cnres.get("cnFillFallbackMode", "Pcolormesh")).lower()
+
+        if fallback in ["none", "off", "raise"]:
+            raise
+
+        lon2d, lat2d = mesh_lon_lat(lon, lat)
+
+        mappable = ax.pcolormesh(
+            lon2d,
+            lat2d,
+            arr,
+            shading=_pcolormesh_shading(cnres),
+            **kwargs,
+        )
+
+        return mappable, "pcolormesh"
+
+
+def _style_line_labels(labels, cnres):
+    background = cnres.get("cnLineLabelBackgroundColor", None)
+
+    for label in labels:
+        if "cnLineLabelFontColor" in cnres:
+            label.set_color(cnres["cnLineLabelFontColor"])
+
+        if background is not None:
+            label.set_bbox(
+                {
+                    "facecolor": background,
+                    "edgecolor": cnres.get("cnLineLabelPerimColor", "none"),
+                    "alpha": float(cnres.get("cnLineLabelBackgroundAlphaF", 0.8)),
+                    "pad": float(cnres.get("cnLineLabelBackgroundPadF", 0.1)),
+                }
+            )
+
+    return labels
+
+
+def _draw_contour_lines(ax, lon, lat, arr, levels, cnres, is_constant):
+    line_labels_on = bool_resource(cnres, "cnLineLabelsOn", False)
+    lines_on = bool_resource(cnres, "cnLinesOn", False) or line_labels_on
+
+    if not lines_on or is_constant:
+        return None, []
+
+    transform = _data_transform(ax)
+
+    line_colors = cnres.get("cnLineColors", cnres.get("cnLineColor", "black"))
+    line_thicknesses = cnres.get(
+        "cnLineThicknesses",
+        cnres.get("cnLineThicknessF", 0.6),
+    )
+    line_patterns = cnres.get(
+        "cnLineDashPatterns",
+        cnres.get("cnLineDashPattern", "solid"),
+    )
+
+    kwargs = {
+        "levels": levels,
+        "colors": _as_list_or_value(line_colors),
+        "linewidths": _as_list_or_value(line_thicknesses),
+        "linestyles": _as_list_or_value(line_patterns, mapper=_map_dash),
+        "zorder": float(cnres.get("cnLineZOrder", 5)),
+    }
+
+    if transform is not None:
+        kwargs["transform"] = transform
+
+    contour = ax.contour(lon, lat, arr, **kwargs)
+    label_artists = []
+
+    if line_labels_on:
+        interval = max(1, int(cnres.get("cnLineLabelInterval", 1)))
+        label_levels = contour.levels[::interval]
+
+        label_artists = ax.clabel(
+            contour,
+            label_levels,
+            inline=bool_resource(cnres, "cnLineLabelPlacementInline", True),
+            inline_spacing=float(cnres.get("cnLineLabelInlineSpacingF", 4.0)),
+            fontsize=float(cnres.get("cnLineLabelFontHeightF", 8)),
+            fmt=cnres.get("cnLineLabelFormat", "%g"),
+        )
+
+        _style_line_labels(label_artists, cnres)
+
+    return contour, label_artists
+
+
+def _add_constant_label(ax, value, cnres, is_constant):
+    if not is_constant:
+        return None
+
     if not bool_resource(cnres, "cnConstFLabelOn", False):
         return None
 
-    label = cnres.get("cnConstFLabelString", f"Constant field: {value:.3g}")
+    label = cnres.get("cnConstFLabelString", f"constant field = {value:.4g}")
 
     return ax.text(
         float(cnres.get("cnConstFLabelXF", 0.5)),
         float(cnres.get("cnConstFLabelYF", 0.5)),
-        label,
+        str(label),
         transform=ax.transAxes,
         ha="center",
         va="center",
@@ -191,49 +497,84 @@ def _add_const_label(ax, value, cnres):
         color=cnres.get("cnConstFLabelFontColor", "black"),
         bbox={
             "facecolor": cnres.get("cnConstFLabelBackgroundColor", "white"),
-            "edgecolor": cnres.get("cnConstFLabelPerimColor", "black"),
-            "alpha": float(cnres.get("cnConstFLabelBackgroundAlphaF", 0.8)),
+            "edgecolor": cnres.get("cnConstFLabelPerimColor", "0.4"),
+            "alpha": float(cnres.get("cnConstFLabelBackgroundAlphaF", 0.75)),
+            "pad": float(cnres.get("cnConstFLabelBackgroundPadF", 0.3)),
         },
-        zorder=float(cnres.get("cnConstFLabelZOrder", 20)),
+        zorder=float(cnres.get("cnConstFLabelZOrder", 30)),
     )
 
 
-def _add_info_label(ax, arr, cnres):
+def _add_info_label(ax, arr, levels, cnres, is_constant):
     if not bool_resource(cnres, "cnInfoLabelOn", False):
         return None
 
-    label = cnres.get(
-        "cnInfoLabelString",
-        f"min={np.nanmin(arr):.3g}, max={np.nanmax(arr):.3g}",
-    )
+    vmin, vmax, _ = _finite_minmax(arr)
+    label = cnres.get("cnInfoLabelString", None)
 
-    just = str(cnres.get("cnInfoLabelJust", "bottom_left")).lower()
+    if label is None:
+        if is_constant:
+            label = f"constant field = {vmin:.4g}"
+        elif levels is not None and len(levels) >= 2:
+            spacing = levels[1] - levels[0]
+            label = f"min={vmin:.3g}, max={vmax:.3g}, interval={spacing:.3g}"
+        else:
+            label = f"min={vmin:.3g}, max={vmax:.3g}"
 
-    if just in ["bottom_left", "left"]:
-        x, y, ha, va = 0.01, 0.01, "left", "bottom"
-    elif just in ["bottom_right", "right"]:
-        x, y, ha, va = 0.99, 0.01, "right", "bottom"
-    elif just in ["top_left"]:
-        x, y, ha, va = 0.01, 0.99, "left", "top"
-    elif just in ["top_right"]:
-        x, y, ha, va = 0.99, 0.99, "right", "top"
+    if "cnInfoLabelParallelPosF" in cnres or "cnInfoLabelOrthogonalPosF" in cnres:
+        x = float(cnres.get("cnInfoLabelParallelPosF", 0.98))
+        y = float(cnres.get("cnInfoLabelOrthogonalPosF", 0.02))
     else:
-        x, y, ha, va = 0.01, 0.01, "left", "bottom"
+        just0 = str(cnres.get("cnInfoLabelJust", "bottom_left")).lower()
+
+        if just0 in ["bottom_left", "left"]:
+            x, y = 0.01, 0.01
+        elif just0 in ["bottom_right", "right"]:
+            x, y = 0.99, 0.01
+        elif just0 in ["top_left"]:
+            x, y = 0.01, 0.99
+        elif just0 in ["top_right"]:
+            x, y = 0.99, 0.99
+        else:
+            x, y = 0.98, 0.02
+
+    just = str(cnres.get("cnInfoLabelJust", "BottomRight")).lower()
+
+    if "left" in just:
+        ha = "left"
+    elif "center" in just:
+        ha = "center"
+    else:
+        ha = "right"
+
+    if "top" in just:
+        va = "top"
+    elif "center" in just:
+        va = "center"
+    else:
+        va = "bottom"
+
+    bbox = None
+
+    if bool_resource(cnres, "cnInfoLabelPerimOn", True):
+        bbox = {
+            "facecolor": cnres.get("cnInfoLabelBackgroundColor", "white"),
+            "edgecolor": cnres.get("cnInfoLabelPerimColor", "0.4"),
+            "linewidth": float(cnres.get("cnInfoLabelPerimThicknessF", 0.5)),
+            "alpha": float(cnres.get("cnInfoLabelBackgroundAlphaF", 0.75)),
+            "pad": float(cnres.get("cnInfoLabelBackgroundPadF", 0.25)),
+        }
 
     return ax.text(
-        float(cnres.get("cnInfoLabelXF", x)),
-        float(cnres.get("cnInfoLabelYF", y)),
-        label,
+        x,
+        y,
+        str(label),
         transform=ax.transAxes,
         ha=ha,
         va=va,
-        fontsize=float(cnres.get("cnInfoLabelFontHeightF", 8)),
+        fontsize=float(cnres.get("cnInfoLabelFontHeightF", 8.0)),
         color=cnres.get("cnInfoLabelFontColor", "black"),
-        bbox={
-            "facecolor": cnres.get("cnInfoLabelBackgroundColor", "white"),
-            "edgecolor": cnres.get("cnInfoLabelPerimColor", "none"),
-            "alpha": float(cnres.get("cnInfoLabelBackgroundAlphaF", 0.7)),
-        },
+        bbox=bbox,
         zorder=float(cnres.get("cnInfoLabelZOrder", 20)),
     )
 
@@ -263,49 +604,11 @@ def _add_title(ax, tires, gsnres):
     return ax.set_title(**kwargs)
 
 
-def _style_line_labels(labels, cnres):
-    background = cnres.get("cnLineLabelBackgroundColor", None)
-
-    if background is None:
-        return labels
-
-    for label in labels:
-        label.set_bbox(
-            {
-                "facecolor": background,
-                "edgecolor": cnres.get("cnLineLabelPerimColor", "none"),
-                "alpha": float(cnres.get("cnLineLabelBackgroundAlphaF", 0.8)),
-                "pad": float(cnres.get("cnLineLabelBackgroundPadF", 0.1)),
-            }
-        )
-
-    return labels
-
-
-def _handle_frame(fig, gsnres):
-    frame_on = bool_resource(gsnres, "gsnFrame", False)
-
-    if not frame_on:
-        return None
-
-    filename = (
-        gsnres.get("gsnFrameFileName")
-        or gsnres.get("gsnFrameFilename")
-        or gsnres.get("gsnFrameFile")
-    )
-
-    if filename is None:
-        return None
-
-    dpi = int(gsnres.get("gsnFrameDpi", 300))
-    bbox_inches = gsnres.get("gsnFrameBBoxInches", "tight")
-
-    fig.savefig(filename, dpi=dpi, bbox_inches=bbox_inches)
-
-    return filename
-
-
-def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
+def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=None):
+    """
+    Draw an NCL-style contour map using one unified contour workflow.
+    """
+    res = dict(res or {})
     groups = split_resources(res)
 
     cnres = groups["contour"]
@@ -318,1078 +621,119 @@ def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
 
     mpres = {**mpres, **tmres}
 
-    arr, lon, lat = to_numpy_data_lon_lat(data, lon=lon, lat=lat)
+    if bool_resource(gsnres, "gsnPolar", False):
+        polar_keys = [
+            "gsnPolar",
+            "gsnPolarLabelOn",
+            "gsnPolarLabelDistance",
+            "gsnPolarLabelFontHeightF",
+            "gsnPolarLabelFontColor",
+            "gsnPolarLongitudeLabelsOn",
+            "gsnPolarLongitudeLabelValues",
+            "gsnPolarLatitudeLabelOn",
+            "gsnPolarLatitudeLabelString",
+            "gsnPolarLatitudeLabelPosition",
+            "gsnPolarLatitudeLabelDistance",
+            "gsnPolarBoundaryOn",
+            "mpPolarHideRectangularFrameOn",
+            "gsnPolarBottomLabelYF",
+            "gsnPolarClampBottomLabelsOn",
+            "gsnPolarLatitudeLabelYF",
+        ]
+
+        for key in polar_keys:
+            if key in gsnres:
+                mpres[key] = gsnres[key]
+
+        if "gsnPolarBoundaryOn" in gsnres:
+            mpres["mpPolarBoundaryOn"] = gsnres["gsnPolarBoundaryOn"]
+
+        if "mpPolarHideRectangularFrameOn" in gsnres:
+            mpres["mpPolarHideRectangularFrameOn"] = gsnres["mpPolarHideRectangularFrameOn"]
+
+        mpres.setdefault("mpPolarBoundaryOn", True)
+        mpres.setdefault("mpPolarHideRectangularFrameOn", True)
+
+    arr, lon, lat = _prepare_contour_data(data, lon=lon, lat=lat)
     arr = _smooth_field(arr, cnres)
 
-    arr, lon = maybe_add_cyclic(
-        arr,
-        lon,
-        add_cyclic=bool_resource(gsnres, "gsnAddCyclic", True),
+    if lon.ndim == 1:
+        arr, lon = maybe_add_cyclic(
+            arr,
+            lon,
+            add_cyclic=bool_resource(gsnres, "gsnAddCyclic", True),
+        )
+
+    levels, is_constant = _build_contour_levels(arr, cnres)
+    extend = _normalize_extend(
+        cnres.get("cnFillExtendMode", cnres.get("cnExtendMode", "both"))
     )
-
-    fig, ax = create_map_axes(fig=fig, ax=ax, mpres=mpres)
-
-    levels = resolve_contour_levels(cnres)
-    extend = _normalize_extend(cnres.get("cnFillExtendMode", "both"))
 
     cmap = _get_fill_cmap(cnres, levels, extend)
     cmap, norm = _get_cmap_and_norm(levels, cmap, extend)
 
-    is_const, const_value = _is_constant_field(arr)
+    fig, ax = create_map_axes(fig=fig, ax=ax, mpres=mpres)
 
-    fill_on = bool_resource(cnres, "cnFillOn", True)
-    lines_on = bool_resource(cnres, "cnLinesOn", False)
-    line_labels_on = bool_resource(cnres, "cnLineLabelsOn", False)
+    mappable, fill_method = _draw_contour_fill(
+        ax,
+        lon,
+        lat,
+        arr,
+        levels,
+        cnres,
+        cmap,
+        norm,
+        extend,
+        is_constant,
+    )
 
-    fill_mode = cnres.get("cnFillMode", "AreaFill")
+    contour_lines, line_label_artists = _draw_contour_lines(
+        ax,
+        lon,
+        lat,
+        arr,
+        levels,
+        cnres,
+        is_constant,
+    )
 
-    mappable = None
-    contour_lines = None
-    line_label_artists = []
-    const_label = None
-
-    if fill_on:
-        if fill_mode in ["RasterFill", "CellFill", "PcolorFill", "Pcolormesh"]:
-            lon2d, lat2d = mesh_lon_lat(lon, lat)
-
-            mappable = ax.pcolormesh(
-                lon2d,
-                lat2d,
-                arr,
-                cmap=cmap,
-                norm=norm,
-                shading=cnres.get("cnRasterSmoothingOn", "auto"),
-                edgecolors=cnres.get("cnCellFillEdgeColor", "none"),
-                linewidth=float(cnres.get("cnCellFillEdgeThicknessF", 0.0)),
-                transform=ccrs.PlateCarree(),
-                zorder=float(cnres.get("cnFillZOrder", 3)),
-            )
-        else:
-            try:
-                mappable = ax.contourf(
-                    lon,
-                    lat,
-                    arr,
-                    levels=levels,
-                    cmap=cmap,
-                    norm=norm,
-                    extend=extend,
-                    transform=ccrs.PlateCarree(),
-                    zorder=float(cnres.get("cnFillZOrder", 3)),
-                )
-            except TypeError as exc:
-                if "GeometryCollection" not in str(exc):
-                    raise
-
-                lon2d, lat2d = mesh_lon_lat(lon, lat)
-
-                mappable = ax.pcolormesh(
-                    lon2d,
-                    lat2d,
-                    arr,
-                    cmap=cmap,
-                    norm=norm,
-                    shading="auto",
-                    transform=ccrs.PlateCarree(),
-                    zorder=float(cnres.get("cnFillZOrder", 3)),
-                )
-
-    if lines_on and not is_const:
-        line_colors = cnres.get("cnLineColors", cnres.get("cnLineColor", "black"))
-        line_thicknesses = cnres.get(
-            "cnLineThicknesses",
-            cnres.get("cnLineThicknessF", 0.5),
-        )
-        line_patterns = cnres.get(
-            "cnLineDashPatterns",
-            cnres.get("cnLineDashPattern", "solid"),
-        )
-
-        contour_lines = ax.contour(
-            lon,
-            lat,
-            arr,
-            levels=levels,
-            colors=_as_list_or_value(line_colors),
-            linewidths=_as_list_or_value(line_thicknesses),
-            linestyles=_as_list_or_value(line_patterns, mapper=_map_dash),
-            transform=ccrs.PlateCarree(),
-            zorder=float(cnres.get("cnLineZOrder", 5)),
-        )
-
-        if line_labels_on:
-            interval = int(cnres.get("cnLineLabelInterval", 1))
-
-            if interval < 1:
-                interval = 1
-
-            label_levels = contour_lines.levels[::interval]
-
-            line_label_artists = ax.clabel(
-                contour_lines,
-                label_levels,
-                inline=bool_resource(cnres, "cnLineLabelPlacementInline", True),
-                fontsize=float(cnres.get("cnLineLabelFontHeightF", 8)),
-                fmt=cnres.get("cnLineLabelFormat", "%g"),
-            )
-
-            _style_line_labels(line_label_artists, cnres)
-
-    if is_const:
-        const_label = _add_const_label(ax, const_value, cnres)
-
-    _add_title(ax, tires, gsnres)
+    const_value, _, _ = _finite_minmax(arr)
+    constant_label = _add_constant_label(ax, const_value, cnres, is_constant)
+    info_label = _add_info_label(ax, arr, levels, cnres, is_constant)
+    title_artist = _add_title(ax, tires, gsnres)
     string_artists = add_gsn_strings(ax, gsnres)
-
-    info_label = _add_info_label(ax, arr, cnres)
 
     cbar = None
 
     if bool_resource(lbres, "lbLabelBarOn", True) and mappable is not None:
         cbar = add_labelbar(fig, ax, mappable, lbres, pmres=pmres)
 
-    frame_file = _handle_frame(fig, gsnres)
-
-    return fig, ax, {
+    out = {
         "mappable": mappable,
+        "contour": contour_lines,
         "contour_lines": contour_lines,
-        "line_label_artists": line_label_artists,
-        "constant_label": const_label,
-        "info_label": info_label,
         "colorbar": cbar,
+        "line_label_artists": line_label_artists,
+        "constant_label": constant_label,
+        "info_label": info_label,
+        "title_artist": title_artist,
         "string_artists": string_artists,
-        "frame_file": frame_file,
-        "groups": groups,
-    }
-
-
-# v0.3.2 contour enhancements begin
-
-try:
-    _climara_v031_ncl_contour_map = ncl_contour_map
-except NameError:
-    _climara_v031_ncl_contour_map = None
-
-import sys as _sys_v032
-import numpy as _np_v032
-import matplotlib.pyplot as _plt_v032
-import matplotlib.ticker as _mticker_v032
-from matplotlib.colors import BoundaryNorm as _BoundaryNorm_v032
-from matplotlib.colors import ListedColormap as _ListedColormap_v032
-
-try:
-    import cartopy.crs as _ccrs_v032
-    import cartopy.feature as _cfeature_v032
-except Exception:
-    _ccrs_v032 = None
-    _cfeature_v032 = None
-
-try:
-    from ._resources import bool_resource as _bool_resource_v032
-except Exception:
-    def _bool_resource_v032(res, key, default=False):
-        value = res.get(key, default)
-        if isinstance(value, str):
-            return value.lower() not in ["false", "none", "off", "no", "0"]
-        return bool(value)
-
-try:
-    from ._maps import create_projection as _create_projection_v032
-except Exception:
-    _create_projection_v032 = None
-
-try:
-    from ._tickmark import build_grid_locators as _build_grid_locators_v032
-    from ._tickmark import apply_gridliner_labels as _apply_gridliner_labels_v032
-except Exception:
-    _build_grid_locators_v032 = None
-    _apply_gridliner_labels_v032 = None
-
-try:
-    from ._labelbar import add_labelbar as _add_labelbar_v032
-except Exception:
-    _add_labelbar_v032 = None
-
-
-def _v032_is_advanced_contour_request(data, res):
-    res = res or {}
-
-    advanced_keys = [
-        "cnLineLabelsOn",
-        "cnLineLabelInterval",
-        "cnLineLabelFormat",
-        "cnLineLabelFontHeightF",
-        "cnLineLabelFontColor",
-        "cnInfoLabelOn",
-        "cnInfoLabelString",
-        "cnInfoLabelFontHeightF",
-        "cnInfoLabelBackgroundColor",
-        "cnConstantFieldMode",
-        "cnConstantFieldFillColor",
-        "cnFillFallbackMode",
-    ]
-
-    for key in advanced_keys:
-        if key in res:
-            return True
-
-    fill_mode = str(res.get("cnFillMode", "")).lower()
-
-    if fill_mode in ["auto", "contourf", "area", "areafill", "rasterfill", "cellfill"]:
-        return True
-
-    try:
-        arr = _np_v032.asarray(getattr(data, "values", data), dtype=float)
-        finite = arr[_np_v032.isfinite(arr)]
-
-        if finite.size > 0 and float(finite.min()) == float(finite.max()):
-            return True
-    except Exception:
-        pass
-
-    return False
-
-
-def _v032_get_coord(data, names):
-    if not hasattr(data, "coords"):
-        return None
-
-    for name in names:
-        if name in data.coords:
-            return _np_v032.asarray(data.coords[name])
-
-    return None
-
-
-def _v032_prepare_data(data, lon=None, lat=None):
-    arr = getattr(data, "values", data)
-    arr = _np_v032.asarray(arr, dtype=float)
-    arr = _np_v032.squeeze(arr)
-
-    if arr.ndim != 2:
-        raise ValueError("ContourPlot only supports 2-D data after squeeze")
-
-    if lon is None:
-        lon = _v032_get_coord(data, ["lon", "longitude", "x"])
-
-    if lat is None:
-        lat = _v032_get_coord(data, ["lat", "latitude", "y"])
-
-    if lon is None:
-        lon = _np_v032.arange(arr.shape[1], dtype=float)
-
-    if lat is None:
-        lat = _np_v032.arange(arr.shape[0], dtype=float)
-
-    lon = _np_v032.asarray(lon, dtype=float)
-    lat = _np_v032.asarray(lat, dtype=float)
-
-    arr = _np_v032.ma.masked_invalid(arr)
-
-    return arr, lon, lat
-
-
-def _v032_finite_minmax(arr):
-    values = _np_v032.asarray(arr, dtype=float)
-    finite = values[_np_v032.isfinite(values)]
-
-    if finite.size == 0:
-        return None, None, True
-
-    vmin = float(finite.min())
-    vmax = float(finite.max())
-    is_constant = abs(vmax - vmin) <= 1e-12
-
-    return vmin, vmax, is_constant
-
-
-def _v032_as_float_list(values):
-    if values is None:
-        return None
-
-    if isinstance(values, str):
-        values = values.replace(",", " ").split()
-
-    try:
-        return [float(v) for v in values]
-    except TypeError:
-        return [float(values)]
-
-
-def _v032_build_levels(arr, res):
-    res = res or {}
-    vmin, vmax, is_constant = _v032_finite_minmax(arr)
-
-    mode = str(res.get("cnLevelSelectionMode", "AutomaticLevels")).lower()
-
-    explicit = _v032_as_float_list(
-        res.get(
-            "cnLevels",
-            res.get("cnExplicitLevels", None),
-        )
-    )
-
-    if explicit is not None and len(explicit) >= 2:
-        return _np_v032.asarray(explicit, dtype=float), is_constant
-
-    if mode in ["manuallevels", "manual"]:
-        if "cnMinLevelValF" in res and "cnMaxLevelValF" in res and "cnLevelSpacingF" in res:
-            lo = float(res["cnMinLevelValF"])
-            hi = float(res["cnMaxLevelValF"])
-            step = float(res["cnLevelSpacingF"])
-
-            if step > 0:
-                levels = _np_v032.arange(lo, hi + step * 0.5, step)
-                if levels.size >= 2:
-                    return levels, is_constant
-
-    if vmin is None or vmax is None:
-        return _np_v032.asarray([0.0, 1.0], dtype=float), True
-
-    if is_constant:
-        center = vmin
-        width = abs(center) * 0.05
-
-        if width == 0:
-            width = 1.0
-
-        spacing = float(res.get("cnLevelSpacingF", width / 2.0))
-        lo = float(res.get("cnMinLevelValF", center - width))
-        hi = float(res.get("cnMaxLevelValF", center + width))
-
-        if lo == hi:
-            lo = center - width
-            hi = center + width
-
-        levels = _np_v032.arange(lo, hi + spacing * 0.5, spacing)
-
-        if levels.size < 2:
-            levels = _np_v032.asarray([center - width, center + width], dtype=float)
-
-        return levels, True
-
-    if "cnMaxLevelCount" in res:
-        count = max(3, int(res["cnMaxLevelCount"]))
-    else:
-        count = 11
-
-    levels = _np_v032.linspace(vmin, vmax, count)
-
-    if levels.size < 2:
-        levels = _np_v032.asarray([vmin, vmax], dtype=float)
-
-    return levels, False
-
-
-def _v032_get_cmap(res, levels):
-    palette = res.get(
-        "cnFillPalette",
-        res.get("cnFillColors", None),
-    )
-
-    if isinstance(palette, (list, tuple)):
-        return _ListedColormap_v032(list(palette))
-
-    if palette is None:
-        palette = "viridis"
-
-    return _plt_v032.get_cmap(palette)
-
-
-def _v032_extend_mode(res):
-    value = str(
-        res.get(
-            "cnFillExtendMode",
-            res.get("cnExtendMode", "both"),
-        )
-    ).lower()
-
-    aliases = {
-        "true": "both",
-        "false": "neither",
-        "none": "neither",
-        "no": "neither",
-        "minmax": "both",
-    }
-
-    value = aliases.get(value, value)
-
-    if value not in ["neither", "both", "min", "max"]:
-        value = "both"
-
-    return value
-
-
-def _v032_is_geoaxes(ax):
-    return hasattr(ax, "projection") and _ccrs_v032 is not None
-
-
-def _v032_transform(ax):
-    if _v032_is_geoaxes(ax):
-        return _ccrs_v032.PlateCarree()
-
-    return None
-
-
-def _v032_create_fig_ax(fig, ax, res):
-    if ax is not None:
-        if fig is None:
-            fig = ax.figure
-        return fig, ax
-
-    if fig is None:
-        fig = _plt_v032.figure(figsize=res.get("vpFigureSize", (8, 4.8)))
-
-    projection = None
-
-    if _ccrs_v032 is not None:
-        if _create_projection_v032 is not None:
-            try:
-                projection = _create_projection_v032(res)
-            except Exception:
-                projection = _ccrs_v032.PlateCarree()
-        else:
-            projection = _ccrs_v032.PlateCarree()
-
-    if projection is None:
-        ax = fig.add_subplot(111)
-    else:
-        ax = fig.add_subplot(111, projection=projection)
-
-    return fig, ax
-
-
-def _v032_apply_titles(ax, res):
-    title = res.get(
-        "tiMainString",
-        res.get("gsnCenterString", None),
-    )
-
-    if title is not None:
-        ax.set_title(
-            str(title),
-            fontsize=float(res.get("tiMainFontHeightF", res.get("gsnCenterStringFontHeightF", 12))),
-            pad=float(res.get("tiMainOffsetYF", 8)),
-        )
-
-    left = res.get("gsnLeftString", None)
-
-    if left is not None:
-        ax.text(
-            0.0,
-            1.02,
-            str(left),
-            transform=ax.transAxes,
-            ha="left",
-            va="bottom",
-            fontsize=float(res.get("gsnLeftStringFontHeightF", 10)),
-            color=res.get("gsnLeftStringFontColor", "black"),
-        )
-
-    right = res.get("gsnRightString", None)
-
-    if right is not None:
-        ax.text(
-            1.0,
-            1.02,
-            str(right),
-            transform=ax.transAxes,
-            ha="right",
-            va="bottom",
-            fontsize=float(res.get("gsnRightStringFontHeightF", 10)),
-            color=res.get("gsnRightStringFontColor", "black"),
-        )
-
-    return ax
-
-
-def _v032_apply_map(ax, res):
-    gl = None
-
-    if not _v032_is_geoaxes(ax):
-        return gl
-
-    transform = _ccrs_v032.PlateCarree()
-
-    if all(k in res for k in ["mpMinLonF", "mpMaxLonF", "mpMinLatF", "mpMaxLatF"]):
-        ax.set_extent(
-            [
-                float(res["mpMinLonF"]),
-                float(res["mpMaxLonF"]),
-                float(res["mpMinLatF"]),
-                float(res["mpMaxLatF"]),
-            ],
-            crs=transform,
-        )
-    else:
-        try:
-            ax.set_global()
-        except Exception:
-            pass
-
-    if _bool_resource_v032(res, "mpFillOn", False) and _cfeature_v032 is not None:
-        ax.add_feature(
-            _cfeature_v032.LAND,
-            facecolor=res.get("mpLandFillColor", "0.95"),
-            edgecolor="none",
-            zorder=0,
-        )
-        ax.add_feature(
-            _cfeature_v032.OCEAN,
-            facecolor=res.get("mpOceanFillColor", "white"),
-            edgecolor="none",
-            zorder=0,
-        )
-
-    if _bool_resource_v032(res, "mpOutlineOn", True):
-        color = res.get(
-            "mpGeophysicalLineColor",
-            res.get("mpOutlineBoundaryLineColor", "0.25"),
-        )
-        linewidth = float(
-            res.get(
-                "mpGeophysicalLineThicknessF",
-                res.get("mpOutlineBoundaryLineThicknessF", 0.8),
-            )
-        )
-
-        try:
-            ax.coastlines(color=color, linewidth=linewidth)
-        except Exception:
-            pass
-
-    if _bool_resource_v032(res, "mpNationalLineOn", False) and _cfeature_v032 is not None:
-        ax.add_feature(
-            _cfeature_v032.BORDERS,
-            linewidth=float(res.get("mpNationalLineThicknessF", 0.35)),
-            edgecolor=res.get("mpNationalLineColor", "0.45"),
-        )
-
-    grid_on = (
-        _bool_resource_v032(res, "mpGridAndLimbOn", False)
-        or _bool_resource_v032(res, "mpGridOn", False)
-        or _bool_resource_v032(res, "mpGridLabelsOn", False)
-    )
-
-    if grid_on:
-        draw_labels = _bool_resource_v032(res, "mpGridLabelsOn", True)
-
-        gl = ax.gridlines(
-            crs=transform,
-            draw_labels=draw_labels,
-            linewidth=float(res.get("mpGridLineThicknessF", 0.35)),
-            color=res.get("mpGridLineColor", "0.75"),
-            linestyle=res.get("mpGridLineDashPattern", "-"),
-            alpha=float(res.get("mpGridLineAlphaF", 1.0)),
-        )
-
-        if _build_grid_locators_v032 is not None:
-            try:
-                xlocs, ylocs = _build_grid_locators_v032(res)
-
-                if xlocs is not None:
-                    gl.xlocator = xlocs
-
-                if ylocs is not None:
-                    gl.ylocator = ylocs
-            except Exception:
-                pass
-
-        if _apply_gridliner_labels_v032 is not None:
-            try:
-                _apply_gridliner_labels_v032(gl, res)
-            except Exception:
-                pass
-
-    return gl
-
-
-def _v032_draw_fill(ax, lon, lat, arr, levels, res, is_constant):
-    fill_on = _bool_resource_v032(res, "cnFillOn", True)
-
-    if not fill_on:
-        return None, None
-
-    cmap = _v032_get_cmap(res, levels)
-    norm = _BoundaryNorm_v032(levels, ncolors=cmap.N, clip=False)
-    extend = _v032_extend_mode(res)
-    transform = _v032_transform(ax)
-
-    kwargs = {
-        "cmap": cmap,
-        "norm": norm,
-    }
-
-    if transform is not None:
-        kwargs["transform"] = transform
-
-    fill_mode = str(res.get("cnFillMode", "Auto")).lower()
-    fallback = str(res.get("cnFillFallbackMode", "Pcolormesh")).lower()
-
-    use_pcolormesh = fill_mode in ["pcolormesh", "rasterfill", "cellfill"]
-
-    if is_constant:
-        constant_mode = str(res.get("cnConstantFieldMode", "Fill")).lower()
-
-        if constant_mode in ["skip", "none", "off"]:
-            return None, None
-
-        use_pcolormesh = True
-
-    if use_pcolormesh:
-        mappable = ax.pcolormesh(
-            lon,
-            lat,
-            arr,
-            shading=res.get("cnPcolormeshShading", "auto"),
-            **kwargs,
-        )
-        return mappable, "pcolormesh"
-
-    try:
-        mappable = ax.contourf(
-            lon,
-            lat,
-            arr,
-            levels=levels,
-            extend=extend,
-            **kwargs,
-        )
-        return mappable, "contourf"
-    except Exception as exc:
-        if fallback in ["none", "off", "raise"]:
-            raise
-
-        print(
-            f"[climara] contourf failed, fallback to pcolormesh: {exc}",
-            file=_sys_v032.stderr,
-        )
-
-        mappable = ax.pcolormesh(
-            lon,
-            lat,
-            arr,
-            shading=res.get("cnPcolormeshShading", "auto"),
-            **kwargs,
-        )
-        return mappable, "pcolormesh"
-
-
-def _v032_draw_lines(ax, lon, lat, arr, levels, res, is_constant):
-    line_labels_on = _bool_resource_v032(res, "cnLineLabelsOn", False)
-    lines_on = _bool_resource_v032(res, "cnLinesOn", False) or line_labels_on
-
-    if not lines_on or is_constant:
-        return None, []
-
-    transform = _v032_transform(ax)
-
-    kwargs = {
-        "levels": levels,
-        "colors": res.get("cnLineColor", "black"),
-        "linewidths": float(res.get("cnLineThicknessF", 0.6)),
-    }
-
-    if transform is not None:
-        kwargs["transform"] = transform
-
-    linestyle = res.get("cnLineDashPattern", None)
-
-    if linestyle is not None:
-        kwargs["linestyles"] = linestyle
-
-    contour = ax.contour(lon, lat, arr, **kwargs)
-
-    label_artists = []
-
-    if line_labels_on:
-        interval = max(1, int(res.get("cnLineLabelInterval", 1)))
-        label_levels = contour.levels[::interval]
-
-        fmt = res.get("cnLineLabelFormat", "%g")
-
-        label_artists = ax.clabel(
-            contour,
-            levels=label_levels,
-            inline=_bool_resource_v032(res, "cnLineLabelInline", True),
-            inline_spacing=float(res.get("cnLineLabelInlineSpacingF", 4.0)),
-            fontsize=float(res.get("cnLineLabelFontHeightF", 7.5)),
-            fmt=fmt,
-            colors=res.get("cnLineLabelFontColor", res.get("cnLineColor", "black")),
-        )
-
-    return contour, label_artists
-
-
-def _v032_add_info_label(ax, arr, levels, res, is_constant):
-    if not _bool_resource_v032(res, "cnInfoLabelOn", False):
-        return None
-
-    vmin, vmax, _ = _v032_finite_minmax(arr)
-
-    label = res.get("cnInfoLabelString", None)
-
-    if label is None:
-        if is_constant:
-            label = f"constant field = {vmin:.4g}"
-        elif len(levels) >= 2:
-            spacing = levels[1] - levels[0]
-            label = f"min={vmin:.3g}, max={vmax:.3g}, interval={spacing:.3g}"
-        else:
-            label = f"min={vmin:.3g}, max={vmax:.3g}"
-
-    x = float(res.get("cnInfoLabelParallelPosF", 0.98))
-    y = float(res.get("cnInfoLabelOrthogonalPosF", 0.02))
-
-    just = str(res.get("cnInfoLabelJust", "BottomRight")).lower()
-
-    if "left" in just:
-        ha = "left"
-    elif "center" in just:
-        ha = "center"
-    else:
-        ha = "right"
-
-    if "top" in just:
-        va = "top"
-    elif "center" in just:
-        va = "center"
-    else:
-        va = "bottom"
-
-    bbox = None
-
-    if _bool_resource_v032(res, "cnInfoLabelPerimOn", True):
-        bbox = {
-            "facecolor": res.get("cnInfoLabelBackgroundColor", "white"),
-            "edgecolor": res.get("cnInfoLabelPerimColor", "0.4"),
-            "linewidth": float(res.get("cnInfoLabelPerimThicknessF", 0.5)),
-            "alpha": float(res.get("cnInfoLabelBackgroundAlphaF", 0.75)),
-            "pad": float(res.get("cnInfoLabelBackgroundPadF", 0.25)),
-        }
-
-    artist = ax.text(
-        x,
-        y,
-        str(label),
-        transform=ax.transAxes,
-        ha=ha,
-        va=va,
-        fontsize=float(res.get("cnInfoLabelFontHeightF", 8.0)),
-        color=res.get("cnInfoLabelFontColor", "black"),
-        bbox=bbox,
-        zorder=20,
-    )
-
-    return artist
-
-
-def _v032_add_constant_label(ax, arr, res, is_constant):
-    if not is_constant:
-        return None
-
-    if not _bool_resource_v032(res, "cnConstFLabelOn", False):
-        return None
-
-    vmin, _, _ = _v032_finite_minmax(arr)
-
-    text = res.get("cnConstFLabelString", f"constant field = {vmin:.4g}")
-
-    return ax.text(
-        0.5,
-        0.5,
-        str(text),
-        transform=ax.transAxes,
-        ha="center",
-        va="center",
-        fontsize=float(res.get("cnConstFLabelFontHeightF", 10.0)),
-        color=res.get("cnConstFLabelFontColor", "black"),
-        bbox={
-            "facecolor": res.get("cnConstFLabelBackgroundColor", "white"),
-            "edgecolor": res.get("cnConstFLabelPerimColor", "0.4"),
-            "alpha": float(res.get("cnConstFLabelBackgroundAlphaF", 0.75)),
-            "pad": float(res.get("cnConstFLabelBackgroundPadF", 0.3)),
-        },
-        zorder=30,
-    )
-
-
-def _v032_add_labelbar(fig, ax, mappable, res):
-    if mappable is None:
-        return None
-
-    if not _bool_resource_v032(res, "lbLabelBarOn", True):
-        return None
-
-    if _add_labelbar_v032 is not None:
-        try:
-            return _add_labelbar_v032(fig, ax, mappable, res)
-        except Exception as exc:
-            print(
-                f"[climara] add_labelbar failed, fallback to fig.colorbar: {exc}",
-                file=_sys_v032.stderr,
-            )
-
-    orientation = str(res.get("lbOrientation", "horizontal")).lower()
-    return fig.colorbar(mappable, ax=ax, orientation=orientation, shrink=0.82, pad=0.08)
-
-
-def _v032_ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
-    res = dict(res or {})
-
-    arr, lon, lat = _v032_prepare_data(data, lon=lon, lat=lat)
-    levels, is_constant = _v032_build_levels(arr, res)
-
-    fig, ax = _v032_create_fig_ax(fig, ax, res)
-
-    gridliner = _v032_apply_map(ax, res)
-
-    mappable, fill_method = _v032_draw_fill(
-        ax,
-        lon,
-        lat,
-        arr,
-        levels,
-        res,
-        is_constant,
-    )
-
-    contour, line_label_artists = _v032_draw_lines(
-        ax,
-        lon,
-        lat,
-        arr,
-        levels,
-        res,
-        is_constant,
-    )
-
-    info_label = _v032_add_info_label(ax, arr, levels, res, is_constant)
-    const_label = _v032_add_constant_label(ax, arr, res, is_constant)
-
-    _v032_apply_titles(ax, res)
-
-    cbar = _v032_add_labelbar(fig, ax, mappable, res)
-
-    _v033_cleanup_plain_axis_ticks_after_plot(ax, res)
-
-    return fig, ax, {
-        "mappable": mappable,
-        "contour": contour,
-        "colorbar": cbar,
-        "gridliner": gridliner,
-        "line_label_artists": line_label_artists,
-        "info_label": info_label,
-        "constant_label": const_label,
         "levels": levels,
         "is_constant": is_constant,
         "fill_method": fill_method,
+        "groups": groups,
     }
 
+    fig, ax, out = apply_gsn_workflow(
+        fig,
+        ax=ax,
+        out=out,
+        gsnres=gsnres,
+        wks=wks,
+    )
 
-def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
-    res = dict(res or {})
-
-    use_new = _v032_is_advanced_contour_request(data, res)
-
-    if not use_new and _climara_v031_ncl_contour_map is not None:
-        return _climara_v031_ncl_contour_map(
-            data,
-            lon=lon,
-            lat=lat,
-            res=res,
-            fig=fig,
-            ax=ax,
-        )
-
-    try:
-        return _v032_ncl_contour_map(
-            data,
-            lon=lon,
-            lat=lat,
-            res=res,
-            fig=fig,
-            ax=ax,
-        )
-    except Exception as exc:
-        if _climara_v031_ncl_contour_map is None:
-            raise
-
-        print(
-            f"[climara] v0.3.2 contour path failed, fallback to v0.3.1 path: {exc}",
-            file=_sys_v032.stderr,
-        )
-
-        return _climara_v031_ncl_contour_map(
-            data,
-            lon=lon,
-            lat=lat,
-            res=res,
-            fig=fig,
-            ax=ax,
-        )
+    return fig, ax, out
 
 
 gsn_csm_contour_map = ncl_contour_map
 gsn_csm_contour = ncl_contour_map
-
-# v0.3.2 contour enhancements end
-
-
-# v0.3.3 map bridge begin
-
-try:
-    _v033_old_apply_map = _v032_apply_map
-except NameError:
-    _v033_old_apply_map = None
-
-try:
-    from ._maps import set_map_extent as _v033_set_map_extent
-    from ._maps import add_map_features as _v033_add_map_features
-except Exception:
-    _v033_set_map_extent = None
-    _v033_add_map_features = None
-
-
-def _v032_apply_map(ax, res):
-    gl = None
-
-    try:
-        if not _v032_is_geoaxes(ax):
-            return gl
-    except Exception:
-        if _v033_old_apply_map is not None:
-            return _v033_old_apply_map(ax, res)
-        return gl
-
-    if _v033_set_map_extent is not None and _v033_add_map_features is not None:
-        try:
-            _v033_set_map_extent(ax, res)
-            out = _v033_add_map_features(ax, res)
-
-            if isinstance(out, dict):
-                return out.get("gridliner", None)
-
-            return None
-        except Exception:
-            pass
-
-    if _v033_old_apply_map is not None:
-        return _v033_old_apply_map(ax, res)
-
-    return gl
-
-# v0.3.3 map bridge end
-
-
-
-# v0.3.3 post-plot tick cleanup begin
-
-try:
-    import matplotlib.ticker as _mticker_v033_cleanup
-except Exception:
-    _mticker_v033_cleanup = None
-
-
-def _v033_cleanup_projection_key(res):
-    value = str(res.get("mpProjection", ""))
-    value = value.replace("_", "").replace("-", "").replace(" ", "").lower()
-
-    aliases = {
-        "cylindricalequidistant": "platecarree",
-        "platecarree": "platecarree",
-        "robinson": "robinson",
-        "mollweide": "mollweide",
-        "orthographic": "orthographic",
-        "equalearth": "equalearth",
-        "sinusoidal": "sinusoidal",
-        "interruptedgoodehomolosine": "interruptedgoodehomolosine",
-        "nearsideperspective": "nearsideperspective",
-        "geostationary": "geostationary",
-    }
-
-    return aliases.get(value, value)
-
-
-def _v033_cleanup_is_curved_projection(res):
-    key = _v033_cleanup_projection_key(res)
-
-    return key in {
-        "robinson",
-        "mollweide",
-        "orthographic",
-        "equalearth",
-        "sinusoidal",
-        "interruptedgoodehomolosine",
-        "nearsideperspective",
-        "geostationary",
-    }
-
-
-def _v033_cleanup_plain_axis_ticks_after_plot(ax, res):
-    if res.get("tmPlainAxisTicksOn", None) is True:
-        return
-
-    force_off = res.get("tmPlainAxisTicksOn", None) is False
-    auto_off = _v033_cleanup_is_curved_projection(res) and not _bool_resource_v032(res, "mpGridLabelsOn", False)
-
-    if not force_off and not auto_off:
-        return
-
-    if _mticker_v033_cleanup is not None:
-        try:
-            ax.xaxis.set_major_locator(_mticker_v033_cleanup.NullLocator())
-            ax.yaxis.set_major_locator(_mticker_v033_cleanup.NullLocator())
-            ax.xaxis.set_minor_locator(_mticker_v033_cleanup.NullLocator())
-            ax.yaxis.set_minor_locator(_mticker_v033_cleanup.NullLocator())
-        except Exception:
-            pass
-
-    try:
-        ax.set_xticks([])
-        ax.set_yticks([])
-    except Exception:
-        pass
-
-    try:
-        ax.tick_params(
-            bottom=False,
-            top=False,
-            left=False,
-            right=False,
-            labelbottom=False,
-            labeltop=False,
-            labelleft=False,
-            labelright=False,
-        )
-    except Exception:
-        pass
-
-    try:
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-    except Exception:
-        labels = []
-
-    for label in labels:
-        try:
-            label.set_visible(False)
-        except Exception:
-            pass
-
-    for child in ax.get_children():
-        if not hasattr(child, "get_text"):
-            continue
-
-        try:
-            value = child.get_text()
-        except Exception:
-            continue
-
-        if "°" in str(value):
-            try:
-                child.set_visible(False)
-            except Exception:
-                pass
-
-# v0.3.3 post-plot tick cleanup end
-

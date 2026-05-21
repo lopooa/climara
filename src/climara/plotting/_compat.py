@@ -4,6 +4,363 @@ from pathlib import Path
 
 
 SUPPORTED_RESOURCES = [
+    {
+        "group": "Workstation",
+        "resource": "ncl_draw",
+        "status": "yes",
+        "file": "_workstation.py",
+        "notes": "Draw a matplotlib figure.",
+    },
+    {
+        "group": "Workstation",
+        "resource": "ncl_frame",
+        "status": "yes",
+        "file": "_workstation.py",
+        "notes": "Save a matplotlib figure.",
+    },
+    {
+        "group": "Workstation",
+        "resource": "ncl_close",
+        "status": "yes",
+        "file": "_workstation.py",
+        "notes": "Close matplotlib figures.",
+    },
+    {
+        "group": "Workstation",
+        "resource": "NclWorkstation",
+        "status": "yes",
+        "file": "_workstation.py",
+        "notes": "Workstation object with draw/frame/close methods.",
+    },
+    {
+        "group": "ObjectLayer",
+        "resource": "ContourMapPlot",
+        "status": "yes",
+        "file": "_objects.py",
+        "notes": "Object-oriented wrapper around gsn_csm_contour_map.",
+    },
+    {
+        "group": "ObjectLayer",
+        "resource": "PanelMapPlot",
+        "status": "yes",
+        "file": "_objects.py",
+        "notes": "Object-oriented wrapper around gsn_panel.",
+    },
+    {
+        "group": "ObjectLayer",
+        "resource": "contour_map",
+        "status": "yes",
+        "file": "_objects.py",
+        "notes": "Convenience function returning a drawn ContourMapPlot.",
+    },
+    {
+        "group": "ObjectLayer",
+        "resource": "panel_map",
+        "status": "yes",
+        "file": "_objects.py",
+        "notes": "Convenience function returning a drawn PanelMapPlot.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsMarkerIndex",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Marker symbol index/name for marker overlays.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsMarkerColor",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Marker face color.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsMarkerSizeF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Marker size.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsMarkerAlphaF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Marker opacity.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsMarkerStride",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Subsample marker locations.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsStippleStride",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Subsample stipple mask locations.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsStippleColor",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Stipple marker color.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsStippleMarkerSizeF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Stipple marker size.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsLineColor",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Polyline, polygon, and rectangle line color.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsLineThicknessF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Polyline, polygon, and rectangle line width.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsLineDashPattern",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Polyline, polygon, and rectangle dash pattern.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsFillColor",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Polygon/rectangle fill color.",
+    },
+    {
+        "group": "Overlay",
+        "resource": "gsCoordinateMode",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Use data/geographic, axes, or figure coordinates.",
+    },
+    {
+        "group": "TextItem",
+        "resource": "txFontHeightF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Overlay text font size.",
+    },
+    {
+        "group": "TextItem",
+        "resource": "txFontColor",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Overlay text color.",
+    },
+    {
+        "group": "TextItem",
+        "resource": "txJust",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Overlay text justification.",
+    },
+    {
+        "group": "TextItem",
+        "resource": "txAngleF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Overlay text rotation angle.",
+    },
+    {
+        "group": "VectorPlot",
+        "resource": "vcGlyphStyle",
+        "status": "partial",
+        "file": "_overlay.py",
+        "notes": "LineArrow via quiver; WindBarb via barbs.",
+    },
+    {
+        "group": "VectorPlot",
+        "resource": "vcVectorScaleF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Quiver vector scale.",
+    },
+    {
+        "group": "VectorPlot",
+        "resource": "vcMinDistanceF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Vector stride/subsampling.",
+    },
+    {
+        "group": "VectorPlot",
+        "resource": "vcRefAnnoOn",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Draw a vector reference annotation.",
+    },
+    {
+        "group": "VectorPlot",
+        "resource": "vcRefMagnitudeF",
+        "status": "yes",
+        "file": "_overlay.py",
+        "notes": "Reference vector magnitude.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbLabelAlignment",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Control whether labels are placed on box centers, boundaries, or interior edges.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbLabelFormat",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Format tick labels using printf, format spec, or str.format style.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbLabelMaxCount",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Maximum label count used by lbLabelAutoStride.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbTickMarksOn",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Turn labelbar tick marks on/off.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbTickLengthF",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Tick mark length.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbTickThicknessF",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Tick mark linewidth.",
+    },
+    {
+        "group": "LabelBar",
+        "resource": "lbBoxSeparatorLineThicknessF",
+        "status": "yes",
+        "file": "_labelbar.py",
+        "notes": "Line width for separators between labelbar boxes.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpGeophysicalLineColor",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Coastline/geophysical outline color.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpGeophysicalLineThicknessF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Coastline/geophysical outline linewidth.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpNationalLineColor",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "National-border line color.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpNationalLineThicknessF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "National-border linewidth.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpUSStateLineOn",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Draw US state/province lines where Cartopy data are available.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpDataResolution",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Map Natural Earth data resolution: 110m, 50m, 10m, or NCL-like aliases.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpPerimLineColor",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Map perimeter line color.",
+    },
+    {
+        "group": "MapPlot",
+        "resource": "mpPerimLineThicknessF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Map perimeter linewidth.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolar",
+        "status": "yes",
+        "file": "_gsn.py / _maps.py",
+        "notes": "Enable polar-map defaults and polar label handling.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLabelOn",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Turn polar labels on/off.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLabelDistance",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Distance of polar labels from the circular map boundary.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLabelFontHeightF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Polar label font size.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLongitudeLabelsOn",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Draw longitude labels around polar maps.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLatitudeLabelOn",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Draw the polar edge-latitude label.",
+    },
     # contour
     {
         "group": "ContourPlot",
@@ -293,6 +650,14 @@ SUPPORTED_RESOURCES = [
         "status": "partial",
         "file": "_maps.py",
         "notes": "Map perimeter visibility.",
+    },
+
+    {
+        "group": "MapPlot",
+        "resource": "mpOutlineBoundarySets",
+        "status": "partial",
+        "file": "_maps.py",
+        "notes": "Maps common NCL boundary-set names to coastline, national border, and US state features.",
     },
 
     # labelbar
@@ -708,3 +1073,172 @@ def export_resource_compatibility(path="docs/ncl_resource_compatibility.md", row
 def print_supported_resources(group: str | None = None, status: str | None = None):
     rows = list_supported_resources(group=group, status=status)
     print(supported_resources_to_markdown(rows))
+
+# climara v0.2.9 compatibility helpers begin
+
+def _compat_normalize_status(status):
+    status = str(status).strip().lower()
+
+    aliases = {
+        "yes": "yes",
+        "supported": "yes",
+        "done": "yes",
+        "true": "yes",
+        "partial": "partial",
+        "partly": "partial",
+        "experimental": "partial",
+        "planned": "planned",
+        "todo": "planned",
+        "no": "planned",
+        "false": "planned",
+    }
+
+    return aliases.get(status, status or "planned")
+
+
+def _compat_resource_rows():
+    rows = []
+
+    for item in SUPPORTED_RESOURCES:
+        row = dict(item)
+        row.setdefault("group", "Other")
+        row.setdefault("resource", "")
+        row.setdefault("status", "planned")
+        row.setdefault("file", "")
+        row.setdefault("notes", "")
+        row["status"] = _compat_normalize_status(row["status"])
+        rows.append(row)
+
+    rows.sort(
+        key=lambda r: (
+            str(r.get("group", "")),
+            str(r.get("resource", "")),
+        )
+    )
+
+    return rows
+
+
+def get_resource_compatibility():
+    return _compat_resource_rows()
+
+
+def list_supported_resources(group=None, status=None):
+    rows = _compat_resource_rows()
+
+    if group is not None:
+        key = str(group).lower()
+        rows = [
+            row for row in rows
+            if str(row.get("group", "")).lower() == key
+        ]
+
+    if status is not None:
+        key = _compat_normalize_status(status)
+        rows = [
+            row for row in rows
+            if _compat_normalize_status(row.get("status", "")) == key
+        ]
+
+    return rows
+
+
+def search_supported_resources(keyword):
+    keyword = str(keyword).lower()
+    rows = _compat_resource_rows()
+
+    return [
+        row for row in rows
+        if keyword in str(row.get("resource", "")).lower()
+        or keyword in str(row.get("group", "")).lower()
+        or keyword in str(row.get("file", "")).lower()
+        or keyword in str(row.get("notes", "")).lower()
+    ]
+
+
+def summarize_resource_compatibility():
+    rows = _compat_resource_rows()
+    summary = {}
+
+    for row in rows:
+        status = _compat_normalize_status(row.get("status", "planned"))
+        summary[status] = summary.get(status, 0) + 1
+
+    return dict(sorted(summary.items()))
+
+
+def _compat_markdown_table(rows):
+    lines = [
+        "| Group | Resource | Status | File | Notes |",
+        "|---|---|---|---|---|",
+    ]
+
+    for row in rows:
+        group = str(row.get("group", "")).replace("|", "\\|")
+        resource = str(row.get("resource", "")).replace("|", "\\|")
+        status = str(row.get("status", "")).replace("|", "\\|")
+        file = str(row.get("file", "")).replace("|", "\\|")
+        notes = str(row.get("notes", "")).replace("|", "\\|")
+
+        lines.append(
+            f"| {group} | `{resource}` | {status} | `{file}` | {notes} |"
+        )
+
+    return "\n".join(lines)
+
+
+def make_resource_compatibility_markdown(title="NCL Resource Compatibility"):
+    rows = _compat_resource_rows()
+    summary = summarize_resource_compatibility()
+
+    lines = [
+        f"# {title}",
+        "",
+        "This file is generated from `src/climara/plotting/_compat.py`.",
+        "",
+        "## Summary",
+        "",
+        "| Status | Count |",
+        "|---|---:|",
+    ]
+
+    for status, count in summary.items():
+        lines.append(f"| {status} | {count} |")
+
+    lines.extend(
+        [
+            "",
+            "## Resources",
+            "",
+            _compat_markdown_table(rows),
+            "",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def export_resource_compatibility(path="docs/ncl_resource_compatibility.md"):
+    from pathlib import Path
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        make_resource_compatibility_markdown(),
+        encoding="utf-8",
+    )
+
+    return path
+
+
+def print_resource_compatibility_summary():
+    summary = summarize_resource_compatibility()
+
+    print("NCL resource compatibility summary:")
+
+    for status, count in summary.items():
+        print(f"  {status}: {count}")
+
+    return summary
+
+# climara v0.2.9 compatibility helpers end

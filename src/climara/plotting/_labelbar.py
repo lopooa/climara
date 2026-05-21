@@ -374,3 +374,575 @@ def gsn_labelbar(fig, mappable, res=None, ax=None, cax=None):
         raise ValueError("ax or cax must be given when no manual labelbar position is used")
 
     return add_labelbar(fig, ax, mappable, res, cax=cax)
+
+# climara v0.2.5 labelbar resource override begin
+
+def _v025_parse_sequence(value):
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        text = value.strip()
+
+        if not text:
+            return []
+
+        if "|" in text:
+            return [item.strip() for item in text.split("|")]
+
+        if "," in text:
+            return [item.strip() for item in text.split(",")]
+
+        return text.split()
+
+    try:
+        return list(value)
+    except TypeError:
+        return [value]
+
+
+def _v025_parse_float_sequence(value):
+    items = _v025_parse_sequence(value)
+
+    if items is None:
+        return None
+
+    return [float(item) for item in items]
+
+
+def _v025_get_boundaries_from_mappable(mappable):
+    norm = getattr(mappable, "norm", None)
+
+    boundaries = getattr(norm, "boundaries", None)
+
+    if boundaries is None:
+        boundaries = getattr(mappable, "boundaries", None)
+
+    if boundaries is None:
+        return None
+
+    boundaries = np.asarray(boundaries, dtype=float)
+
+    if boundaries.ndim != 1 or boundaries.size < 2:
+        return None
+
+    return boundaries
+
+
+def _v025_get_ticks_from_alignment(cbar, mappable, lbres):
+    explicit = _v025_parse_float_sequence(lbres.get("lbLabelPositions", None))
+
+    if explicit is not None:
+        return np.asarray(explicit, dtype=float)
+
+    boundaries = _v025_get_boundaries_from_mappable(mappable)
+    alignment = str(lbres.get("lbLabelAlignment", "")).replace("_", "").replace("-", "").lower()
+
+    if boundaries is None:
+        return np.asarray(cbar.get_ticks(), dtype=float)
+
+    if alignment in ["boxcenters", "center", "centers", "midpoints"]:
+        return 0.5 * (boundaries[:-1] + boundaries[1:])
+
+    if alignment in ["interioredges", "internaledges", "inneredges"]:
+        if boundaries.size > 2:
+            return boundaries[1:-1]
+
+        return boundaries
+
+    if alignment in ["externaledges", "outeredges", "edges", "boundaries"]:
+        return boundaries
+
+    return np.asarray(cbar.get_ticks(), dtype=float)
+
+
+def _v025_format_tick(value, fmt):
+    if fmt is None:
+        return None
+
+    if callable(fmt):
+        return fmt(value)
+
+    fmt = str(fmt)
+
+    try:
+        if "{" in fmt:
+            return fmt.format(value)
+    except Exception:
+        pass
+
+    try:
+        return fmt % value
+    except Exception:
+        pass
+
+    try:
+        return format(value, fmt)
+    except Exception:
+        return str(value)
+
+
+def _v025_apply_labelbar_axis(cbar, lbres):
+    orientation = _normalize_orientation(lbres)
+
+    if orientation == "horizontal":
+        position = str(lbres.get("lbLabelPosition", "bottom")).lower()
+
+        if position in ["top", "above"]:
+            cbar.ax.xaxis.set_ticks_position("top")
+            cbar.ax.xaxis.set_label_position("top")
+        else:
+            cbar.ax.xaxis.set_ticks_position("bottom")
+            cbar.ax.xaxis.set_label_position("bottom")
+    else:
+        position = str(lbres.get("lbLabelPosition", "right")).lower()
+
+        if position in ["left"]:
+            cbar.ax.yaxis.set_ticks_position("left")
+            cbar.ax.yaxis.set_label_position("left")
+        else:
+            cbar.ax.yaxis.set_ticks_position("right")
+            cbar.ax.yaxis.set_label_position("right")
+
+    return cbar
+
+
+def _v025_apply_labelbar_ticks(cbar, mappable, lbres):
+    ticks = _v025_get_ticks_from_alignment(cbar, mappable, lbres)
+
+    if ticks is None:
+        ticks = np.asarray(cbar.get_ticks(), dtype=float)
+
+    ticks = np.asarray(ticks, dtype=float)
+
+    stride = int(lbres.get("lbLabelStride", 1))
+
+    if stride < 1:
+        stride = 1
+
+    auto_stride = bool_resource(lbres, "lbLabelAutoStride", False)
+    max_labels = int(lbres.get("lbLabelMaxCount", 9))
+
+    if auto_stride and ticks.size > max_labels:
+        stride = int(np.ceil(ticks.size / max_labels))
+
+    if stride > 1 and ticks.size > 0:
+        ticks = ticks[::stride]
+
+    if ticks.size > 0:
+        cbar.set_ticks(ticks)
+
+    labels = _v025_parse_sequence(lbres.get("lbLabelStrings", None))
+
+    if labels is not None:
+        labels = [str(item) for item in labels]
+
+        if len(labels) != len(ticks):
+            # 如果用户给的是每个 box 的标签，但 stride 后 ticks 少了，也同步 stride。
+            if stride > 1 and len(labels) > len(ticks):
+                labels = labels[::stride]
+
+        if len(labels) == len(ticks):
+            cbar.set_ticklabels(labels)
+    else:
+        fmt = lbres.get("lbLabelFormat", None)
+
+        if fmt is not None and ticks.size > 0:
+            cbar.set_ticklabels([_v025_format_tick(v, fmt) for v in ticks])
+
+    label_size = lbres.get("lbLabelFontHeightF", None)
+    label_color = lbres.get("lbLabelFontColor", None)
+    tick_color = lbres.get("lbTickMarkColor", label_color)
+    tick_length = lbres.get("lbTickLengthF", None)
+    tick_width = lbres.get("lbTickThicknessF", None)
+
+    tick_kwargs = {}
+
+    if label_size is not None:
+        tick_kwargs["labelsize"] = float(label_size)
+
+    if label_color is not None:
+        tick_kwargs["labelcolor"] = label_color
+
+    if tick_color is not None:
+        tick_kwargs["colors"] = tick_color
+
+    if tick_length is not None:
+        tick_kwargs["length"] = float(tick_length)
+
+    if tick_width is not None:
+        tick_kwargs["width"] = float(tick_width)
+
+    if tick_kwargs:
+        cbar.ax.tick_params(**tick_kwargs)
+
+    if not bool_resource(lbres, "lbTickMarksOn", True):
+        cbar.ax.tick_params(length=0)
+
+    angle = float(lbres.get("lbLabelAngleF", 0.0))
+    weight = lbres.get("lbLabelFontWeight", None)
+
+    orientation = _normalize_orientation(lbres)
+
+    if orientation == "horizontal":
+        texts = cbar.ax.get_xticklabels()
+    else:
+        texts = cbar.ax.get_yticklabels()
+
+    for text in texts:
+        text.set_rotation(angle)
+
+        if weight is not None:
+            text.set_fontweight(weight)
+
+        if label_color is not None:
+            text.set_color(label_color)
+
+    return cbar
+
+
+def _v025_apply_labelbar_title(cbar, lbres):
+    title = lbres.get("lbTitleString", None)
+
+    if title is None:
+        return cbar
+
+    orientation = _normalize_orientation(lbres)
+    position = str(lbres.get("lbTitlePosition", "bottom")).lower()
+    size = float(lbres.get("lbTitleFontHeightF", 10))
+    color = lbres.get("lbTitleFontColor", "black")
+    weight = lbres.get("lbTitleFontWeight", "normal")
+    pad = float(lbres.get("lbTitleOffsetF", 4))
+
+    if orientation == "horizontal":
+        if position in ["top", "above"]:
+            cbar.ax.set_title(
+                str(title),
+                fontsize=size,
+                color=color,
+                fontweight=weight,
+                pad=pad,
+            )
+        else:
+            cbar.ax.set_xlabel(
+                str(title),
+                fontsize=size,
+                color=color,
+                fontweight=weight,
+                labelpad=pad,
+            )
+    else:
+        cbar.ax.set_ylabel(
+            str(title),
+            fontsize=size,
+            color=color,
+            fontweight=weight,
+            labelpad=pad,
+        )
+
+        if position in ["left"]:
+            cbar.ax.yaxis.set_label_position("left")
+            cbar.ax.yaxis.tick_left()
+        else:
+            cbar.ax.yaxis.set_label_position("right")
+            cbar.ax.yaxis.tick_right()
+
+    return cbar
+
+
+def _v025_apply_labelbar_box(cbar, lbres):
+    box_lines_on = bool_resource(lbres, "lbBoxLinesOn", True)
+
+    if not box_lines_on:
+        cbar.outline.set_visible(False)
+
+        if hasattr(cbar, "solids") and cbar.solids is not None:
+            try:
+                cbar.solids.set_edgecolor("face")
+                cbar.solids.set_linewidth(0.0)
+            except Exception:
+                pass
+
+        return cbar
+
+    color = lbres.get("lbBoxLineColor", "0.2")
+    linewidth = float(lbres.get("lbBoxLineThicknessF", 0.8))
+    separator_width = float(lbres.get("lbBoxSeparatorLineThicknessF", linewidth))
+
+    cbar.outline.set_visible(True)
+    cbar.outline.set_edgecolor(color)
+    cbar.outline.set_linewidth(linewidth)
+
+    if hasattr(cbar, "solids") and cbar.solids is not None:
+        try:
+            cbar.solids.set_edgecolor(color)
+            cbar.solids.set_linewidth(separator_width)
+        except Exception:
+            pass
+
+    return cbar
+
+
+try:
+    _climara_v025_base_add_labelbar
+except NameError:
+    _climara_v025_base_add_labelbar = add_labelbar
+
+
+def add_labelbar(fig, ax, mappable, lbres: dict | None = None, cax=None, pmres=None):
+    """Add an NCL-style labelbar with stronger resource handling."""
+    lbres = _merge_labelbar_resources(lbres, pmres)
+
+    if not bool_resource(lbres, "lbLabelBarOn", True):
+        return None
+
+    display_mode = str(lbres.get("pmLabelBarDisplayMode", "Always")).lower()
+
+    if display_mode in ["never", "no", "false", "none", "off"]:
+        return None
+
+    orientation = _normalize_orientation(lbres)
+
+    if cax is None:
+        cax = _manual_cax_from_pm(fig, ax, lbres)
+
+    drawedges = bool_resource(lbres, "lbBoxLinesOn", True)
+
+    extend = lbres.get("lbExtend", None)
+
+    colorbar_kwargs = {
+        "orientation": orientation,
+        "drawedges": drawedges,
+    }
+
+    if extend is not None:
+        colorbar_kwargs["extend"] = extend
+
+    if cax is not None:
+        cbar = fig.colorbar(
+            mappable,
+            cax=cax,
+            **colorbar_kwargs,
+        )
+    else:
+        cbar = fig.colorbar(
+            mappable,
+            ax=ax,
+            shrink=float(lbres.get("lbShrinkF", 0.82)),
+            pad=float(lbres.get("lbPadF", 0.06)),
+            aspect=float(lbres.get("lbAspectF", 28)),
+            **colorbar_kwargs,
+        )
+
+    _v025_apply_labelbar_axis(cbar, lbres)
+    _v025_apply_labelbar_ticks(cbar, mappable, lbres)
+    _v025_apply_labelbar_title(cbar, lbres)
+    _v025_apply_labelbar_box(cbar, lbres)
+
+    return cbar
+
+# climara v0.2.5 labelbar resource override end
+
+# climara v0.2.5b labelbar string fix begin
+
+def _v025_select_indices(n, stride=1, auto_stride=False, max_count=9):
+    if n <= 0:
+        return np.asarray([], dtype=int)
+
+    stride = max(1, int(stride))
+
+    if auto_stride and n > max_count:
+        idx = np.linspace(0, n - 1, int(max_count))
+        idx = np.unique(np.round(idx).astype(int))
+        return idx
+
+    if stride > 1:
+        return np.arange(0, n, stride, dtype=int)
+
+    return np.arange(0, n, dtype=int)
+
+
+def _v025_ticks_for_label_strings(cbar, mappable, lbres, labels):
+    explicit = _v025_parse_float_sequence(lbres.get("lbLabelPositions", None))
+
+    if explicit is not None and len(explicit) == len(labels):
+        return np.asarray(explicit, dtype=float)
+
+    boundaries = _v025_get_boundaries_from_mappable(mappable)
+
+    if boundaries is not None:
+        alignment = str(lbres.get("lbLabelAlignment", "BoxCenters"))
+        alignment = alignment.replace("_", "").replace("-", "").lower()
+
+        centers = 0.5 * (boundaries[:-1] + boundaries[1:])
+
+        if alignment in ["externaledges", "outeredges", "edges", "boundaries"]:
+            base = boundaries
+        elif alignment in ["interioredges", "internaledges", "inneredges"]:
+            base = boundaries[1:-1] if boundaries.size > 2 else boundaries
+        else:
+            base = centers
+
+        base = np.asarray(base, dtype=float)
+
+        if base.size == len(labels):
+            return base
+
+        if base.size >= 2:
+            return np.linspace(float(base[0]), float(base[-1]), len(labels))
+
+    ticks = np.asarray(cbar.get_ticks(), dtype=float)
+
+    if ticks.size == len(labels):
+        return ticks
+
+    if ticks.size >= 2:
+        return np.linspace(float(ticks[0]), float(ticks[-1]), len(labels))
+
+    return np.arange(len(labels), dtype=float)
+
+
+def _v025_apply_labelbar_ticks(cbar, mappable, lbres):
+    labels = _v025_parse_sequence(lbres.get("lbLabelStrings", None))
+
+    stride = int(lbres.get("lbLabelStride", 1))
+
+    if stride < 1:
+        stride = 1
+
+    auto_stride = bool_resource(lbres, "lbLabelAutoStride", False)
+    max_labels = int(lbres.get("lbLabelMaxCount", 9))
+
+    if labels is not None:
+        labels = [str(item) for item in labels]
+        ticks = _v025_ticks_for_label_strings(cbar, mappable, lbres, labels)
+
+        idx = _v025_select_indices(
+            len(labels),
+            stride=stride,
+            auto_stride=auto_stride,
+            max_count=max_labels,
+        )
+
+        labels = [labels[i] for i in idx]
+        ticks = np.asarray(ticks, dtype=float)[idx]
+
+        cbar.set_ticks(ticks)
+        cbar.set_ticklabels(labels)
+
+    else:
+        ticks = _v025_get_ticks_from_alignment(cbar, mappable, lbres)
+
+        if ticks is None:
+            ticks = np.asarray(cbar.get_ticks(), dtype=float)
+
+        ticks = np.asarray(ticks, dtype=float)
+
+        if auto_stride and ticks.size > max_labels:
+            stride = int(np.ceil(ticks.size / max_labels))
+
+        if stride > 1 and ticks.size > 0:
+            ticks = ticks[::stride]
+
+        if ticks.size > 0:
+            cbar.set_ticks(ticks)
+
+        fmt = lbres.get("lbLabelFormat", None)
+
+        if fmt is not None and ticks.size > 0:
+            cbar.set_ticklabels([_v025_format_tick(v, fmt) for v in ticks])
+
+    label_size = lbres.get("lbLabelFontHeightF", None)
+    label_color = lbres.get("lbLabelFontColor", None)
+    tick_color = lbres.get("lbTickMarkColor", label_color)
+    tick_length = lbres.get("lbTickLengthF", None)
+    tick_width = lbres.get("lbTickThicknessF", None)
+
+    tick_kwargs = {}
+
+    if label_size is not None:
+        tick_kwargs["labelsize"] = float(label_size)
+
+    if label_color is not None:
+        tick_kwargs["labelcolor"] = label_color
+
+    if tick_color is not None:
+        tick_kwargs["colors"] = tick_color
+
+    if tick_length is not None:
+        tick_kwargs["length"] = float(tick_length)
+
+    if tick_width is not None:
+        tick_kwargs["width"] = float(tick_width)
+
+    if tick_kwargs:
+        cbar.ax.tick_params(**tick_kwargs)
+
+    if not bool_resource(lbres, "lbTickMarksOn", True):
+        cbar.ax.tick_params(length=0)
+
+    angle = float(lbres.get("lbLabelAngleF", 0.0))
+    weight = lbres.get("lbLabelFontWeight", None)
+
+    orientation = _normalize_orientation(lbres)
+
+    if orientation == "horizontal":
+        texts = cbar.ax.get_xticklabels()
+    else:
+        texts = cbar.ax.get_yticklabels()
+
+    for text in texts:
+        text.set_rotation(angle)
+
+        if weight is not None:
+            text.set_fontweight(weight)
+
+        if label_color is not None:
+            text.set_color(label_color)
+
+    return cbar
+
+# climara v0.2.5b labelbar string fix end
+
+# climara v0.2.6b labelbar map-spacing fix begin
+
+def _v026b_needs_extra_bottom_space(lbres):
+    """Return True when map tick labels need extra room above horizontal labelbar."""
+    orientation = _normalize_orientation(lbres)
+
+    if orientation != "horizontal":
+        return False
+
+    if not bool_resource(lbres, "gsnAutoLabelBarSpacingOn", True):
+        return False
+
+    if bool_resource(lbres, "mpGridLabelsOn", False):
+        return True
+
+    if bool_resource(lbres, "tmXBLabelsOn", False):
+        return True
+
+    return False
+
+
+try:
+    _climara_v026b_base_manual_cax_from_pm
+except NameError:
+    _climara_v026b_base_manual_cax_from_pm = _manual_cax_from_pm
+
+
+def _manual_cax_from_pm(fig, ax, lbres):
+    """Manual colorbar axes with safer map-label spacing."""
+    orientation = _normalize_orientation(lbres)
+    lbres = dict(lbres or {})
+
+    if (
+        orientation == "horizontal"
+        and "pmLabelBarOrthogonalPosF" not in lbres
+        and _v026b_needs_extra_bottom_space(lbres)
+    ):
+        lbres["pmLabelBarOrthogonalPosF"] = 0.13
+
+    return _climara_v026b_base_manual_cax_from_pm(fig, ax, lbres)
+
+# climara v0.2.6b labelbar map-spacing fix end

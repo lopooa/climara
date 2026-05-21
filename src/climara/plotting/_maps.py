@@ -9,6 +9,7 @@ import cartopy.feature as cfeature
 
 from ._resources import bool_resource
 from ._tickmark import apply_gridliner_labels, apply_plain_axis_ticks, build_grid_locators
+import matplotlib.patches as mpatches
 
 
 _PROJECTION_ALIASES = {
@@ -313,6 +314,12 @@ def _is_curved_global_projection(mpres):
 
 
 def _safe_grid_draw_labels(mpres):
+    try:
+        if _is_polar_map(mpres) and bool_resource(mpres, "gsnPolarLabelOn", True):
+            return False
+    except NameError:
+        pass
+
     if not bool_resource(mpres, "mpGridLabelsOn", False):
         return False
 
@@ -466,6 +473,8 @@ def add_map_features(ax, mpres: dict | None = None):
     if mpres is None:
         mpres = {}
 
+    mpres = _expand_outline_boundary_sets(mpres)
+
     resolution = mpres.get("mpDataResolution", "110m")
     fill_artists = _apply_map_fill(ax, mpres)
 
@@ -551,7 +560,7 @@ def add_map_features(ax, mpres: dict | None = None):
             linewidth=_float(mpres, "mpGridLineThicknessF", 0.4),
             color=mpres.get("mpGridLineColor", "0.6"),
             alpha=_float(mpres, "mpGridLineAlphaF", 0.6),
-            linestyle=mpres.get("mpGridLineDashPattern", "--"),
+            linestyle=_normalize_dash_pattern(mpres.get("mpGridLineDashPattern", "--")),
             zorder=_float(mpres, "mpGridLineZOrder", 2.0),
             xlocs=xlocs,
             ylocs=ylocs,
@@ -577,6 +586,313 @@ def add_map_features(ax, mpres: dict | None = None):
     }
 
 
+
+def _normalize_dash_pattern(value):
+    dash_map = {
+        0: "solid",
+        1: "dashed",
+        2: "dotted",
+        3: "dashdot",
+        4: "dashed",
+        "0": "solid",
+        "1": "dashed",
+        "2": "dotted",
+        "3": "dashdot",
+        "4": "dashed",
+        "solid": "solid",
+        "dash": "dashed",
+        "dashed": "dashed",
+        "dot": "dotted",
+        "dotted": "dotted",
+        "dashdot": "dashdot",
+        "--": "--",
+        "-": "-",
+        ":": ":",
+        "-.": "-.",
+    }
+
+    if isinstance(value, str):
+        key = value.strip().lower()
+        return dash_map.get(key, value)
+
+    return dash_map.get(value, value)
+
+
+def _expand_outline_boundary_sets(mpres):
+    mpres = dict(mpres or {})
+    value = mpres.get("mpOutlineBoundarySets", None)
+
+    if value is None:
+        return mpres
+
+    key = str(value).replace("_", "").replace("-", "").replace(" ", "").lower()
+
+    if key in ["none", "no", "false", "off"]:
+        mpres.setdefault("mpOutlineOn", False)
+        mpres.setdefault("mpNationalLineOn", False)
+        mpres.setdefault("mpUSStateLineOn", False)
+        return mpres
+
+    if key in ["geophysical", "geophysicalboundarysets"]:
+        mpres.setdefault("mpOutlineOn", True)
+        return mpres
+
+    if key in [
+        "national",
+        "nationalboundaries",
+        "geophysicalandnational",
+        "geophysicalandnationalboundaries",
+    ]:
+        mpres.setdefault("mpOutlineOn", True)
+        mpres.setdefault("mpNationalLineOn", True)
+        return mpres
+
+    if key in [
+        "allboundaries",
+        "all",
+        "geophysicalandusstates",
+        "geophysicalandusstatesboundaries",
+    ]:
+        mpres.setdefault("mpOutlineOn", True)
+        mpres.setdefault("mpNationalLineOn", True)
+        mpres.setdefault("mpUSStateLineOn", True)
+        return mpres
+
+    mpres.setdefault("mpOutlineOn", True)
+
+    return mpres
+
+
+def _is_polar_map(mpres):
+    if bool_resource(mpres, "gsnPolar", False):
+        return True
+
+    key = _projection_key(mpres.get("mpProjection", ""))
+
+    if key != "stereographic":
+        return False
+
+    center_lat = _infer_polar_latitude(mpres)
+
+    return abs(center_lat) >= 60
+
+
+def _polar_hemisphere(mpres):
+    center_lat = _infer_polar_latitude(mpres)
+
+    if center_lat < 0:
+        return "SH"
+
+    return "NH"
+
+
+def _polar_edge_latitude(mpres):
+    hemisphere = _polar_hemisphere(mpres)
+
+    if hemisphere == "SH":
+        return _float(mpres, "mpMaxLatF", -20.0)
+
+    return _float(mpres, "mpMinLatF", 20.0)
+
+
+def _format_latitude_label(value):
+    value = float(value)
+    hemi = "N" if value >= 0 else "S"
+    value = abs(value)
+
+    if abs(value - round(value)) < 1e-6:
+        return f"{int(round(value))}°{hemi}"
+
+    return f"{value:g}°{hemi}"
+
+
+def _format_longitude_label(value):
+    value = float(value)
+    value = ((value + 180.0) % 360.0) - 180.0
+
+    if abs(value) < 1e-6:
+        return "0°"
+
+    if abs(abs(value) - 180.0) < 1e-6:
+        return "180°"
+
+    if value > 0:
+        return f"{int(round(value))}°E"
+
+    return f"{int(round(abs(value)))}°W"
+
+
+def _polar_label_positions(mpres):
+    center_lon = _float(mpres, "mpCenterLonF", 0.0)
+    hemisphere = _polar_hemisphere(mpres)
+    sign = 1.0 if hemisphere == "NH" else -1.0
+
+    longitudes = mpres.get("gsnPolarLongitudeLabelValues", None)
+
+    if longitudes is None:
+        longitudes = [0.0, 90.0, 180.0, -90.0]
+
+    if isinstance(longitudes, str):
+        longitudes = longitudes.replace(",", " ").split()
+
+    longitudes = [float(v) for v in longitudes]
+
+    distance = float(mpres.get("gsnPolarLabelDistance", 1.08))
+    radius = 0.5 * distance
+
+    out = []
+
+    for lon in longitudes:
+        angle = np.deg2rad(lon - center_lon)
+        x = 0.5 + radius * np.sin(angle)
+        y = 0.5 + sign * radius * np.cos(angle)
+
+        if abs(x - 0.5) < 0.05:
+            ha = "center"
+        elif x < 0.5:
+            ha = "right"
+        else:
+            ha = "left"
+
+        if abs(y - 0.5) < 0.05:
+            va = "center"
+        elif y < 0.5:
+            va = "top"
+        else:
+            va = "bottom"
+
+        if bool_resource(mpres, "gsnPolarClampBottomLabelsOn", True) and y < 0:
+            y = float(mpres.get("gsnPolarBottomLabelYF", 0.025))
+            va = "bottom"
+
+        out.append((x, y, _format_longitude_label(lon), ha, va))
+
+    return out
+
+
+
+def add_polar_boundary(ax, mpres=None):
+    """Apply an NCL-like circular boundary for polar stereographic maps."""
+    mpres = dict(mpres or {})
+
+    if not _is_polar_map(mpres):
+        return None
+
+    if not bool_resource(mpres, "mpPolarBoundaryOn", True):
+        return None
+
+    theta = np.linspace(0, 2 * np.pi, 240)
+    center = np.array([0.5, 0.5])
+    radius = float(mpres.get("mpPolarBoundaryRadiusF", 0.5))
+
+    verts = np.vstack(
+        [
+            np.sin(theta) * radius + center[0],
+            np.cos(theta) * radius + center[1],
+        ]
+    ).T
+
+    circle_path = mpath.Path(verts)
+    ax.set_boundary(circle_path, transform=ax.transAxes)
+
+    if bool_resource(mpres, "mpPolarHideRectangularFrameOn", True):
+        for spine in ax.spines.values():
+            try:
+                spine.set_visible(False)
+            except Exception:
+                pass
+
+    if not bool_resource(mpres, "mpPerimOn", True):
+        return None
+
+    circle = mpatches.Circle(
+        (0.5, 0.5),
+        radius,
+        transform=ax.transAxes,
+        fill=False,
+        linewidth=float(mpres.get("mpPerimLineThicknessF", 0.8)),
+        edgecolor=mpres.get("mpPerimLineColor", "black"),
+        zorder=float(mpres.get("mpPerimZOrder", 25.0)),
+        clip_on=False,
+    )
+
+    ax.add_patch(circle)
+
+    return circle
+
+
+def add_polar_labels(ax, mpres=None):
+    mpres = dict(mpres or {})
+
+    if not _is_polar_map(mpres):
+        return []
+
+    if not bool_resource(mpres, "gsnPolarLabelOn", True):
+        return []
+
+    artists = []
+    fontsize = float(mpres.get("gsnPolarLabelFontHeightF", 9.0))
+    color = mpres.get("gsnPolarLabelFontColor", mpres.get("tmXBLabelFontColor", "black"))
+    zorder = float(mpres.get("gsnPolarLabelZOrder", 30.0))
+
+    if bool_resource(mpres, "gsnPolarLongitudeLabelsOn", True):
+        for x, y, label, ha, va in _polar_label_positions(mpres):
+            artist = ax.text(
+                x,
+                y,
+                label,
+                transform=ax.transAxes,
+                ha=ha,
+                va=va,
+                fontsize=fontsize,
+                color=color,
+                clip_on=False,
+                rotation=float(mpres.get("gsnPolarLongitudeLabelAngleF", 0.0)),
+                rotation_mode="anchor",
+                zorder=zorder,
+            )
+            artists.append(artist)
+
+    if bool_resource(mpres, "gsnPolarLatitudeLabelOn", True):
+        edge_lat = _polar_edge_latitude(mpres)
+        label = mpres.get("gsnPolarLatitudeLabelString", _format_latitude_label(edge_lat))
+        position = str(mpres.get("gsnPolarLatitudeLabelPosition", "inside_bottom")).lower()
+        distance = float(mpres.get("gsnPolarLatitudeLabelDistance", mpres.get("gsnPolarLabelDistance", 1.08)))
+
+        if position in ["inside_bottom", "inner_bottom", "bottom_inside"]:
+            x = 0.5
+            y = float(mpres.get("gsnPolarLatitudeLabelYF", 0.115))
+            ha, va = "center", "bottom"
+        elif position in ["inside_top", "inner_top", "top_inside"]:
+            x = 0.5
+            y = float(mpres.get("gsnPolarLatitudeLabelYF", 0.115))
+            ha, va = "center", "top"
+        elif position == "top":
+            x, y, ha, va = 0.5, 0.5 + 0.5 * distance, "center", "bottom"
+        elif position == "left":
+            x, y, ha, va = 0.5 - 0.5 * distance, 0.5, "right", "center"
+        elif position == "right":
+            x, y, ha, va = 0.5 + 0.5 * distance, 0.5, "left", "center"
+        else:
+            x, y, ha, va = 0.5, 0.5 - 0.5 * distance, "center", "top"
+
+        artist = ax.text(
+            x,
+            y,
+            str(label),
+            transform=ax.transAxes,
+            ha=ha,
+            va=va,
+            fontsize=fontsize,
+            color=color,
+            clip_on=False,
+            zorder=zorder,
+        )
+        artists.append(artist)
+
+    return artists
+
+
 def create_map_axes(fig=None, ax=None, mpres: dict | None = None, subplot=111):
     if fig is None:
         fig = plt.figure(figsize=(8, 5))
@@ -587,5 +903,484 @@ def create_map_axes(fig=None, ax=None, mpres: dict | None = None, subplot=111):
 
     set_map_extent(ax, mpres)
     add_map_features(ax, mpres)
+    add_polar_boundary(ax, mpres)
+    add_polar_labels(ax, mpres)
 
     return fig, ax
+
+# climara v0.2.3 polar label override begin
+
+def _climara_override_is_polar_map(mpres=None):
+    mpres = dict(mpres or {})
+
+    if bool_resource(mpres, "gsnPolar", False):
+        return True
+
+    proj = str(mpres.get("mpProjection", "")).lower()
+
+    if "stereo" not in proj:
+        return False
+
+    try:
+        center_lat = float(mpres.get("mpCenterLatF", 90.0))
+    except Exception:
+        center_lat = 90.0
+
+    return abs(center_lat) >= 60.0
+
+
+def _climara_override_polar_hemisphere(mpres=None):
+    mpres = dict(mpres or {})
+
+    try:
+        center_lat = float(mpres.get("mpCenterLatF", 90.0))
+    except Exception:
+        center_lat = 90.0
+
+    if center_lat < 0:
+        return "SH"
+
+    return "NH"
+
+
+def _climara_override_format_lon(value):
+    value = float(value)
+    value = ((value + 180.0) % 360.0) - 180.0
+
+    if abs(value) < 1e-8:
+        return "0°"
+
+    if abs(abs(value) - 180.0) < 1e-8:
+        return "180°"
+
+    if value > 0:
+        return f"{int(round(value))}°E"
+
+    return f"{int(round(abs(value)))}°W"
+
+
+def _climara_override_format_lat(value):
+    value = float(value)
+    hemi = "N" if value >= 0 else "S"
+
+    value = abs(value)
+
+    if abs(value - round(value)) < 1e-8:
+        return f"{int(round(value))}°{hemi}"
+
+    return f"{value:g}°{hemi}"
+
+
+def _climara_override_polar_edge_lat(mpres=None):
+    mpres = dict(mpres or {})
+    hemi = _climara_override_polar_hemisphere(mpres)
+
+    if hemi == "SH":
+        return float(mpres.get("mpMaxLatF", -20.0))
+
+    return float(mpres.get("mpMinLatF", 20.0))
+
+
+def _climara_override_polar_lon_labels(mpres=None):
+    mpres = dict(mpres or {})
+    hemi = _climara_override_polar_hemisphere(mpres)
+    center_lon = float(mpres.get("mpCenterLonF", 0.0))
+
+    if hemi == "SH":
+        top = center_lon + 180.0
+        bottom = center_lon
+    else:
+        top = center_lon
+        bottom = center_lon + 180.0
+
+    left = center_lon - 90.0
+    right = center_lon + 90.0
+
+    return {
+        "top": _climara_override_format_lon(top),
+        "bottom": _climara_override_format_lon(bottom),
+        "left": _climara_override_format_lon(left),
+        "right": _climara_override_format_lon(right),
+    }
+
+
+try:
+    _climara_original_add_map_features
+except NameError:
+    _climara_original_add_map_features = add_map_features
+
+
+def add_map_features(ax, mpres=None):
+    mpres = dict(mpres or {})
+
+    if _climara_override_is_polar_map(mpres):
+        # polar labels are drawn manually by climara, not by Cartopy gridliner
+        mpres["mpGridLabelsOn"] = False
+
+    return _climara_original_add_map_features(ax, mpres)
+
+
+def add_polar_labels(ax, mpres=None):
+    mpres = dict(mpres or {})
+
+    if not _climara_override_is_polar_map(mpres):
+        return []
+
+    if not bool_resource(mpres, "gsnPolarLabelOn", True):
+        return []
+
+    artists = []
+
+    fontsize = float(mpres.get("gsnPolarLabelFontHeightF", 9.0))
+    color = mpres.get(
+        "gsnPolarLabelFontColor",
+        mpres.get("tmXBLabelFontColor", "black"),
+    )
+    zorder = float(mpres.get("gsnPolarLabelZOrder", 50.0))
+
+    # 先清理之前可能已经画出的 polar 手工标签
+    for old in list(getattr(ax, "texts", [])):
+        try:
+            if getattr(old, "_climara_polar_label", False):
+                old.remove()
+        except Exception:
+            pass
+
+    labels = _climara_override_polar_lon_labels(mpres)
+
+    top_y = float(mpres.get("gsnPolarTopLongitudeLabelYF", 1.035))
+    bottom_y = float(mpres.get("gsnPolarBottomLongitudeLabelYF", -0.035))
+    left_x = float(mpres.get("gsnPolarLeftLongitudeLabelXF", -0.045))
+    right_x = float(mpres.get("gsnPolarRightLongitudeLabelXF", 1.045))
+
+    if bool_resource(mpres, "gsnPolarLongitudeLabelsOn", True):
+        specs = [
+            (0.5, top_y, labels["top"], "center", "bottom"),
+            (0.5, bottom_y, labels["bottom"], "center", "top"),
+            (left_x, 0.5, labels["left"], "right", "center"),
+            (right_x, 0.5, labels["right"], "left", "center"),
+        ]
+
+        for x, y, text, ha, va in specs:
+            artist = ax.text(
+                x,
+                y,
+                text,
+                transform=ax.transAxes,
+                ha=ha,
+                va=va,
+                fontsize=fontsize,
+                color=color,
+                rotation=0.0,
+                rotation_mode="anchor",
+                clip_on=False,
+                zorder=zorder,
+            )
+            artist._climara_polar_label = True
+            artists.append(artist)
+
+    if bool_resource(mpres, "gsnPolarLatitudeLabelOn", True):
+        edge_lat = _climara_override_polar_edge_lat(mpres)
+        text = mpres.get(
+            "gsnPolarLatitudeLabelString",
+            _climara_override_format_lat(edge_lat),
+        )
+
+        lat_x = float(mpres.get("gsnPolarLatitudeLabelXF", 0.5))
+        lat_y = float(mpres.get("gsnPolarLatitudeLabelYF", 0.105))
+
+        artist = ax.text(
+            lat_x,
+            lat_y,
+            str(text),
+            transform=ax.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=fontsize,
+            color=color,
+            rotation=0.0,
+            rotation_mode="anchor",
+            clip_on=False,
+            zorder=zorder,
+        )
+        artist._climara_polar_label = True
+        artists.append(artist)
+
+    return artists
+
+# climara v0.2.3 polar label override end
+
+# climara v0.2.4 map resource override begin
+
+def _v024_normalize_resolution(value):
+    """Normalize NCL-like map data resolution names to Cartopy scales."""
+    if value is None:
+        return "110m"
+
+    key = str(value).replace("_", "").replace("-", "").replace(" ", "").lower()
+
+    aliases = {
+        "low": "110m",
+        "lowres": "110m",
+        "coarse": "110m",
+        "110m": "110m",
+
+        "medium": "50m",
+        "mediumres": "50m",
+        "medres": "50m",
+        "50m": "50m",
+
+        "high": "10m",
+        "highres": "10m",
+        "fine": "10m",
+        "10m": "10m",
+    }
+
+    return aliases.get(key, str(value))
+
+
+def _v024_is_transparent_color(value):
+    if value is None:
+        return True
+
+    key = str(value).strip().lower()
+
+    return key in ["none", "transparent", "no", "false", "off"]
+
+
+def _v024_expand_outline_boundary_sets(mpres):
+    mpres = dict(mpres or {})
+    value = mpres.get("mpOutlineBoundarySets", None)
+
+    if value is None:
+        return mpres
+
+    key = str(value).replace("_", "").replace("-", "").replace(" ", "").lower()
+
+    if key in ["none", "no", "false", "off"]:
+        mpres["mpOutlineOn"] = False
+        mpres["mpNationalLineOn"] = False
+        mpres["mpUSStateLineOn"] = False
+        return mpres
+
+    if key in ["geophysical", "geophysicalboundarysets"]:
+        mpres.setdefault("mpOutlineOn", True)
+        return mpres
+
+    if key in [
+        "national",
+        "nationalboundaries",
+        "geophysicalandnational",
+        "geophysicalandnationalboundaries",
+    ]:
+        mpres.setdefault("mpOutlineOn", True)
+        mpres.setdefault("mpNationalLineOn", True)
+        return mpres
+
+    if key in [
+        "all",
+        "allboundaries",
+        "allboundarysets",
+        "geophysicalandusstates",
+        "geophysicalandusstatesboundaries",
+    ]:
+        mpres.setdefault("mpOutlineOn", True)
+        mpres.setdefault("mpNationalLineOn", True)
+        mpres.setdefault("mpUSStateLineOn", True)
+        return mpres
+
+    mpres.setdefault("mpOutlineOn", True)
+
+    return mpres
+
+
+def _v024_add_map_fills(ax, mpres):
+    import cartopy.feature as cfeature
+
+    artists = []
+
+    if not bool_resource(mpres, "mpFillOn", False):
+        return artists
+
+    scale = _v024_normalize_resolution(mpres.get("mpDataResolution", "110m"))
+
+    ocean_color = mpres.get("mpOceanFillColor", "white")
+    land_color = mpres.get("mpLandFillColor", "0.9")
+    inland_water_color = mpres.get("mpInlandWaterFillColor", ocean_color)
+
+    ocean_zorder = float(mpres.get("mpOceanFillZOrder", 0.0))
+    land_zorder = float(mpres.get("mpLandFillZOrder", 1.0))
+    inland_zorder = float(mpres.get("mpInlandWaterFillZOrder", 2.0))
+
+    if not _v024_is_transparent_color(ocean_color):
+        artists.append(
+            ax.add_feature(
+                cfeature.OCEAN.with_scale(scale),
+                facecolor=ocean_color,
+                edgecolor="none",
+                zorder=ocean_zorder,
+            )
+        )
+
+    if not _v024_is_transparent_color(land_color):
+        artists.append(
+            ax.add_feature(
+                cfeature.LAND.with_scale(scale),
+                facecolor=land_color,
+                edgecolor="none",
+                zorder=land_zorder,
+            )
+        )
+
+    if not _v024_is_transparent_color(inland_water_color):
+        artists.append(
+            ax.add_feature(
+                cfeature.LAKES.with_scale(scale),
+                facecolor=inland_water_color,
+                edgecolor="none",
+                zorder=inland_zorder,
+            )
+        )
+
+    return artists
+
+
+def _v024_add_map_outlines(ax, mpres):
+    import cartopy.feature as cfeature
+
+    artists = []
+
+    scale = _v024_normalize_resolution(mpres.get("mpDataResolution", "110m"))
+
+    geo_color = mpres.get(
+        "mpGeophysicalLineColor",
+        mpres.get("mpOutlineLineColor", mpres.get("mpOutlineColor", "0.25")),
+    )
+    geo_width = float(
+        mpres.get(
+            "mpGeophysicalLineThicknessF",
+            mpres.get("mpOutlineLineThicknessF", 0.8),
+        )
+    )
+    geo_zorder = float(mpres.get("mpGeophysicalLineZOrder", 20.0))
+
+    if bool_resource(mpres, "mpOutlineOn", True):
+        try:
+            coast = ax.coastlines(
+                resolution=scale,
+                color=geo_color,
+                linewidth=geo_width,
+                zorder=geo_zorder,
+            )
+            artists.append(coast)
+        except Exception:
+            artists.append(
+                ax.add_feature(
+                    cfeature.COASTLINE.with_scale(scale),
+                    edgecolor=geo_color,
+                    linewidth=geo_width,
+                    facecolor="none",
+                    zorder=geo_zorder,
+                )
+            )
+
+    if bool_resource(mpres, "mpNationalLineOn", False):
+        national_color = mpres.get("mpNationalLineColor", geo_color)
+        national_width = float(mpres.get("mpNationalLineThicknessF", geo_width * 0.6))
+
+        artists.append(
+            ax.add_feature(
+                cfeature.BORDERS.with_scale(scale),
+                edgecolor=national_color,
+                linewidth=national_width,
+                facecolor="none",
+                zorder=float(mpres.get("mpNationalLineZOrder", geo_zorder + 0.5)),
+            )
+        )
+
+    if bool_resource(mpres, "mpUSStateLineOn", False):
+        state_color = mpres.get("mpUSStateLineColor", mpres.get("mpNationalLineColor", geo_color))
+        state_width = float(mpres.get("mpUSStateLineThicknessF", geo_width * 0.45))
+
+        artists.append(
+            ax.add_feature(
+                cfeature.STATES.with_scale(scale),
+                edgecolor=state_color,
+                linewidth=state_width,
+                facecolor="none",
+                zorder=float(mpres.get("mpUSStateLineZOrder", geo_zorder + 0.75)),
+            )
+        )
+
+    if bool_resource(mpres, "mpInlandWaterLineOn", False):
+        water_color = mpres.get("mpInlandWaterLineColor", geo_color)
+        water_width = float(mpres.get("mpInlandWaterLineThicknessF", geo_width * 0.5))
+
+        artists.append(
+            ax.add_feature(
+                cfeature.LAKES.with_scale(scale),
+                edgecolor=water_color,
+                linewidth=water_width,
+                facecolor="none",
+                zorder=float(mpres.get("mpInlandWaterLineZOrder", geo_zorder + 0.25)),
+            )
+        )
+
+    return artists
+
+
+def _v024_apply_map_perimeter(ax, mpres):
+    if not bool_resource(mpres, "mpPerimOn", True):
+        for spine in ax.spines.values():
+            try:
+                spine.set_visible(False)
+            except Exception:
+                pass
+        return []
+
+    color = mpres.get("mpPerimLineColor", mpres.get("mpPerimColor", "black"))
+    width = float(mpres.get("mpPerimLineThicknessF", 0.8))
+
+    artists = []
+
+    for spine in ax.spines.values():
+        try:
+            spine.set_visible(True)
+            spine.set_edgecolor(color)
+            spine.set_linewidth(width)
+            artists.append(spine)
+        except Exception:
+            pass
+
+    return artists
+
+
+try:
+    _climara_v024_base_add_map_features
+except NameError:
+    _climara_v024_base_add_map_features = add_map_features
+
+
+def add_map_features(ax, mpres=None):
+    """Add map features with additional NCL-style MapPlot resources."""
+    mpres = _v024_expand_outline_boundary_sets(dict(mpres or {}))
+
+    artists = {
+        "fills": [],
+        "base": None,
+        "outlines": [],
+        "perimeter": [],
+    }
+
+    artists["fills"] = _v024_add_map_fills(ax, mpres)
+
+    # Preserve previous behavior, including gridlines and polar-label safeguards.
+    artists["base"] = _climara_v024_base_add_map_features(ax, mpres)
+
+    # Add explicit high-zorder outlines so they remain visible over filled contours.
+    artists["outlines"] = _v024_add_map_outlines(ax, mpres)
+    artists["perimeter"] = _v024_apply_map_perimeter(ax, mpres)
+
+    return artists
+
+# climara v0.2.4 map resource override end

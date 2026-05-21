@@ -529,3 +529,438 @@ overlay_quiver = overlay_vectors
 add_polyline = overlay_polyline
 add_polygon = overlay_polygon
 add_rectangle = overlay_rectangle
+
+# climara v0.2.6 overlay resource override begin
+
+def _v026_transform(ax, res=None, default="data"):
+    res = dict(res or {})
+    mode = str(
+        res.get(
+            "gsCoordinateMode",
+            res.get("txCoordinateMode", res.get("vcCoordinateMode", default)),
+        )
+    ).lower()
+
+    if mode in ["axes", "axis", "normalized", "ndc", "figureaxes"]:
+        return ax.transAxes
+
+    if mode in ["figure", "fig"]:
+        return ax.figure.transFigure
+
+    if hasattr(ax, "projection"):
+        return ccrs.PlateCarree()
+
+    return ax.transData
+
+
+def _v026_is_geo_transform(transform):
+    return isinstance(transform, ccrs.CRS)
+
+
+def _v026_to_array(value):
+    if value is None:
+        return None
+
+    if hasattr(value, "values"):
+        value = value.values
+
+    return np.asarray(value)
+
+
+def _v026_subsample_xy(x, y, stride=1):
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    stride = max(1, int(stride))
+
+    return x[::stride], y[::stride]
+
+
+def _v026_subsample_2d(arr, stride_y=1, stride_x=1):
+    arr = np.asarray(arr)
+    stride_y = max(1, int(stride_y))
+    stride_x = max(1, int(stride_x))
+
+    return arr[::stride_y, ::stride_x]
+
+
+def _v026_build_norm(values, res, prefix="gsMarker"):
+    if values is None:
+        return None
+
+    vmin = res.get(f"{prefix}MinValF", res.get("gsMarkerMinValF", None))
+    vmax = res.get(f"{prefix}MaxValF", res.get("gsMarkerMaxValF", None))
+
+    if vmin is None and vmax is None:
+        return None
+
+    import matplotlib.colors as mcolors
+
+    return mcolors.Normalize(
+        vmin=None if vmin is None else float(vmin),
+        vmax=None if vmax is None else float(vmax),
+    )
+
+
+def _v026_get_cmap(res, key="gsMarkerPalette", default="viridis"):
+    palette = res.get(key, default)
+
+    try:
+        return get_colormap(palette)
+    except Exception:
+        import matplotlib.pyplot as plt
+
+        return plt.get_cmap(palette)
+
+
+def _v026_apply_clip(artist, res, key="gsClipOn"):
+    clip_on = bool_resource(res, key, bool_resource(res, "gsClipOn", True))
+
+    try:
+        artist.set_clip_on(clip_on)
+    except Exception:
+        pass
+
+    return artist
+
+
+def overlay_markers(ax, x, y, res=None, values=None, mask=None):
+    """Overlay markers with NCL-style gsMarker resources."""
+    res = dict(res or {})
+
+    x = _v026_to_array(x)
+    y = _v026_to_array(y)
+
+    if mask is not None:
+        mask = np.asarray(mask).astype(bool)
+        x = x[mask]
+        y = y[mask]
+
+        if values is not None:
+            values = np.asarray(values)[mask]
+
+    stride = int(res.get("gsMarkerStride", res.get("gsMarkerSkip", 1)))
+
+    if stride > 1:
+        x, y = _v026_subsample_xy(x, y, stride=stride)
+
+        if values is not None:
+            values = np.asarray(values)[::stride]
+
+    marker = _map_marker(res.get("gsMarkerIndex", res.get("gsMarkerType", "o")))
+    size = float(res.get("gsMarkerSizeF", res.get("gsMarkerSize", 24)))
+    alpha = float(res.get("gsMarkerAlphaF", res.get("gsMarkerOpacityF", 1.0)))
+    linewidth = float(res.get("gsMarkerLineThicknessF", res.get("gsMarkerEdgeThicknessF", 0.8)))
+    zorder = float(res.get("gsMarkerZOrder", res.get("gsZOrder", 20)))
+
+    transform = _v026_transform(ax, res)
+
+    color = res.get("gsMarkerColor", "black")
+    edgecolor = res.get("gsMarkerEdgeColor", color)
+
+    kwargs = {
+        "s": size,
+        "marker": marker,
+        "alpha": alpha,
+        "edgecolors": edgecolor,
+        "linewidths": linewidth,
+        "zorder": zorder,
+    }
+
+    if _v026_is_geo_transform(transform):
+        kwargs["transform"] = transform
+    else:
+        kwargs["transform"] = transform
+
+    if values is not None:
+        kwargs["c"] = values
+        kwargs["cmap"] = _v026_get_cmap(res, key="gsMarkerPalette")
+        norm = _v026_build_norm(values, res, prefix="gsMarker")
+
+        if norm is not None:
+            kwargs["norm"] = norm
+    else:
+        kwargs["c"] = color
+
+    sc = ax.scatter(x, y, **kwargs)
+
+    _v026_apply_clip(sc, res, key="gsMarkerClipOn")
+
+    return sc
+
+
+def overlay_stipple(ax, mask, lon=None, lat=None, res=None):
+    """Overlay stipple markers from a boolean mask."""
+    res = dict(res or {})
+
+    mask = np.asarray(mask).astype(bool)
+
+    if lon is None:
+        lon = np.arange(mask.shape[1], dtype=float)
+
+    if lat is None:
+        lat = np.arange(mask.shape[0], dtype=float)
+
+    lon = np.asarray(lon, dtype=float)
+    lat = np.asarray(lat, dtype=float)
+
+    if lon.ndim == 1 and lat.ndim == 1:
+        lon2d, lat2d = np.meshgrid(lon, lat)
+    else:
+        lon2d, lat2d = lon, lat
+
+    stride_y = int(res.get("gsStippleYStride", res.get("gsStippleStride", 1)))
+    stride_x = int(res.get("gsStippleXStride", res.get("gsStippleStride", 1)))
+
+    mask_s = _v026_subsample_2d(mask, stride_y=stride_y, stride_x=stride_x)
+    lon_s = _v026_subsample_2d(lon2d, stride_y=stride_y, stride_x=stride_x)
+    lat_s = _v026_subsample_2d(lat2d, stride_y=stride_y, stride_x=stride_x)
+
+    marker_res = {
+        "gsMarkerIndex": res.get("gsStippleMarkerIndex", res.get("gsMarkerIndex", ".")),
+        "gsMarkerColor": res.get("gsStippleColor", res.get("gsMarkerColor", "black")),
+        "gsMarkerSizeF": res.get("gsStippleMarkerSizeF", res.get("gsMarkerSizeF", 8)),
+        "gsMarkerAlphaF": res.get("gsStippleAlphaF", res.get("gsMarkerAlphaF", 0.8)),
+        "gsMarkerLineThicknessF": res.get("gsStippleLineThicknessF", 0.0),
+        "gsMarkerZOrder": res.get("gsStippleZOrder", res.get("gsMarkerZOrder", 25)),
+        "gsCoordinateMode": res.get("gsCoordinateMode", "data"),
+    }
+
+    return overlay_markers(
+        ax,
+        lon_s[mask_s],
+        lat_s[mask_s],
+        res=marker_res,
+    )
+
+
+def overlay_text(ax, x, y, text, res=None):
+    """Overlay text with NCL-style tx resources."""
+    res = dict(res or {})
+
+    ha, va = _tx_just_to_align(res.get("txJust", res.get("gsTextJust", "CenterCenter")))
+
+    bbox = None
+
+    if bool_resource(res, "txPerimOn", "txBackgroundFillColor" in res):
+        bbox = {
+            "facecolor": res.get("txBackgroundFillColor", "white"),
+            "edgecolor": res.get("txPerimColor", "0.3"),
+            "linewidth": float(res.get("txPerimThicknessF", 0.6)),
+            "alpha": float(res.get("txBackgroundAlphaF", 0.85)),
+            "pad": float(res.get("txBackgroundPadF", 0.2)),
+        }
+
+    transform = _v026_transform(ax, res)
+
+    txt = ax.text(
+        x,
+        y,
+        text,
+        ha=ha,
+        va=va,
+        color=res.get("txFontColor", res.get("gsTextColor", "black")),
+        fontsize=float(res.get("txFontHeightF", res.get("gsTextFontHeightF", 10))),
+        fontweight=res.get("txFontWeight", "normal"),
+        rotation=float(res.get("txAngleF", 0.0)),
+        bbox=bbox,
+        transform=transform,
+        zorder=float(res.get("txZOrder", res.get("gsTextZOrder", 30))),
+        clip_on=bool_resource(res, "txClipOn", False),
+    )
+
+    return txt
+
+
+def overlay_polyline(ax, x, y, res=None):
+    """Overlay a polyline with NCL-style line resources."""
+    res = dict(res or {})
+
+    transform = _v026_transform(ax, res)
+
+    line = ax.plot(
+        x,
+        y,
+        color=res.get("gsLineColor", "black"),
+        linewidth=float(res.get("gsLineThicknessF", 1.2)),
+        linestyle=_map_dash(res.get("gsLineDashPattern", "solid")),
+        alpha=float(res.get("gsLineAlphaF", 1.0)),
+        marker=res.get("gsLineMarker", None),
+        markersize=float(res.get("gsLineMarkerSizeF", 4.0)),
+        transform=transform,
+        zorder=float(res.get("gsLineZOrder", res.get("gsZOrder", 22))),
+        clip_on=bool_resource(res, "gsLineClipOn", True),
+    )
+
+    return line
+
+
+def overlay_polygon(ax, xy, res=None):
+    """Overlay a polygon in lon/lat or axes coordinates."""
+    res = dict(res or {})
+
+    transform = _v026_transform(ax, res)
+
+    patch = mpatches.Polygon(
+        xy,
+        closed=bool_resource(res, "gsPolygonClosed", True),
+        facecolor=res.get("gsFillColor", res.get("gsPolygonFillColor", "none")),
+        edgecolor=res.get("gsEdgeColor", res.get("gsLineColor", "black")),
+        linewidth=float(res.get("gsLineThicknessF", 1.2)),
+        linestyle=_map_dash(res.get("gsLineDashPattern", "solid")),
+        alpha=float(res.get("gsFillOpacityF", res.get("gsFillAlphaF", 1.0))),
+        transform=transform,
+        zorder=float(res.get("gsPolygonZOrder", res.get("gsZOrder", 23))),
+        clip_on=bool_resource(res, "gsPolygonClipOn", True),
+    )
+
+    ax.add_patch(patch)
+
+    return patch
+
+
+def overlay_rectangle(ax, x0, y0, x1, y1, res=None):
+    """Overlay a rectangle using lower-left and upper-right coordinates."""
+    res = dict(res or {})
+
+    transform = _v026_transform(ax, res)
+
+    width = x1 - x0
+    height = y1 - y0
+
+    patch = mpatches.Rectangle(
+        (x0, y0),
+        width,
+        height,
+        facecolor=res.get("gsFillColor", res.get("gsRectangleFillColor", "none")),
+        edgecolor=res.get("gsEdgeColor", res.get("gsLineColor", "black")),
+        linewidth=float(res.get("gsLineThicknessF", 1.2)),
+        linestyle=_map_dash(res.get("gsLineDashPattern", "solid")),
+        alpha=float(res.get("gsFillOpacityF", res.get("gsFillAlphaF", 1.0))),
+        transform=transform,
+        zorder=float(res.get("gsRectangleZOrder", res.get("gsZOrder", 24))),
+        clip_on=bool_resource(res, "gsRectangleClipOn", True),
+    )
+
+    ax.add_patch(patch)
+
+    return patch
+
+
+def overlay_box(ax, lon_min, lon_max, lat_min, lat_max, res=None):
+    """Convenience wrapper for map region boxes."""
+    return overlay_rectangle(ax, lon_min, lat_min, lon_max, lat_max, res=res)
+
+
+def overlay_vectors(ax, u, v, lon=None, lat=None, res=None):
+    """Overlay vectors using quiver or barbs."""
+    res = dict(res or {})
+
+    u, lon, lat = to_numpy_data_lon_lat(u, lon=lon, lat=lat)
+    v = np.asarray(v.values if hasattr(v, "values") else v)
+
+    if lon.ndim == 1 and lat.ndim == 1:
+        lon2d, lat2d = np.meshgrid(lon, lat)
+    else:
+        lon2d, lat2d = lon, lat
+
+    stride = int(res.get("vcMinDistanceF", res.get("vcVectorStride", 1)))
+
+    if stride < 1:
+        stride = 1
+
+    lon_s = lon2d[::stride, ::stride]
+    lat_s = lat2d[::stride, ::stride]
+    u_s = u[::stride, ::stride]
+    v_s = v[::stride, ::stride]
+
+    color = res.get("vcVectorColor", res.get("vcLineColor", "black"))
+    zorder = float(res.get("vcZOrder", res.get("vcVectorZOrder", 28)))
+    alpha = float(res.get("vcVectorAlphaF", 1.0))
+    transform = ccrs.PlateCarree() if hasattr(ax, "projection") else ax.transData
+
+    glyph = str(res.get("vcGlyphStyle", "LineArrow")).replace("_", "").replace("-", "").lower()
+
+    if glyph in ["barb", "barbs", "windbarb", "windbarbs"]:
+        barb = ax.barbs(
+            lon_s,
+            lat_s,
+            u_s,
+            v_s,
+            color=color,
+            length=float(res.get("vcBarbLengthF", 5.5)),
+            linewidth=float(res.get("vcLineArrowThicknessF", 0.6)),
+            alpha=alpha,
+            transform=transform,
+            zorder=zorder,
+        )
+
+        return {
+            "barbs": barb,
+            "quiver": None,
+            "quiverkey": None,
+        }
+
+    q = ax.quiver(
+        lon_s,
+        lat_s,
+        u_s,
+        v_s,
+        color=color,
+        scale=res.get("vcVectorScaleF", None),
+        scale_units=res.get("vcVectorScaleUnits", None),
+        width=float(res.get("vcLineArrowThicknessF", 0.0025)),
+        headwidth=float(res.get("vcArrowHeadWidthF", 3.0)),
+        headlength=float(res.get("vcArrowHeadLengthF", 5.0)),
+        headaxislength=float(res.get("vcArrowHeadAxisLengthF", 4.5)),
+        alpha=alpha,
+        transform=transform,
+        zorder=zorder,
+    )
+
+    qk = None
+
+    if bool_resource(res, "vcRefAnnoOn", False):
+        ref = float(res.get("vcRefMagnitudeF", 1.0))
+        label = res.get("vcRefAnnoString", f"{ref:g}")
+
+        qk = ax.quiverkey(
+            q,
+            float(res.get("vcRefAnnoXF", 0.88)),
+            float(res.get("vcRefAnnoYF", -0.08)),
+            ref,
+            label,
+            labelpos=res.get("vcRefAnnoLabelPos", "E"),
+            coordinates=res.get("vcRefAnnoCoordinateMode", "axes"),
+            fontproperties={
+                "size": float(res.get("vcRefAnnoFontHeightF", 9)),
+            },
+            color=color,
+        )
+
+    return {
+        "quiver": q,
+        "quiverkey": qk,
+    }
+
+
+add_contour_overlay = overlay_contour
+add_filled_contour_overlay = overlay_filled_contour
+add_marker_overlay = overlay_markers
+add_markers = overlay_markers
+add_stipple_overlay = overlay_stipple
+add_stipple = overlay_stipple
+add_stippling = overlay_stipple
+overlay_stippling = overlay_stipple
+add_text_overlay = overlay_text
+add_text = overlay_text
+add_vector_overlay = overlay_vectors
+add_vectors = overlay_vectors
+overlay_quiver = overlay_vectors
+add_polyline = overlay_polyline
+add_polygon = overlay_polygon
+add_rectangle = overlay_rectangle
+add_box = overlay_box
+add_region_box = overlay_box
+
+# climara v0.2.6 overlay resource override end

@@ -1,7 +1,17 @@
+from ._compat import (
+    SUPPORTED_RESOURCES,
+    get_resource_compatibility,
+    list_supported_resources,
+    search_supported_resources,
+    summarize_resource_compatibility,
+    make_resource_compatibility_markdown,
+    export_resource_compatibility,
+    print_resource_compatibility_summary,
+)
 from ._resources import split_resources, resolve_contour_levels, bool_resource, merge_resources, NclResources
 from ._colors import read_rgb_colormap, get_colormap
 from ._style import ncl_style
-from ._maps import create_projection, create_map_axes
+from ._maps import create_projection, create_map_axes, add_polar_labels, add_polar_boundary, add_polar_boundary, add_polar_labels
 from ._tickmark import build_grid_locators, apply_gridliner_labels, apply_plain_axis_ticks
 from ._contour import ncl_contour_map
 from ._panel import ncl_panel_maps
@@ -30,6 +40,13 @@ from ._overlay import (
     add_polyline,
     add_polygon,
     add_rectangle,
+    overlay_stipple,
+    overlay_stippling,
+    add_stipple_overlay,
+    add_stipple,
+    add_stippling,
+    add_box,
+    add_region_box,
 )
 from ._objects import ScalarField, OverlayLayer, MapPlot, ContourMapPlot, PanelMapPlot
 from ._compat import (
@@ -49,6 +66,12 @@ from ._workstation import (
     draw,
     frame,
 )
+from ._workflow import (
+    apply_gsn_maximize,
+    apply_gsn_draw,
+    apply_gsn_frame,
+    apply_gsn_workflow,
+)
 from ._gsn import (
     gsn_csm_contour_map,
     gsn_csm_contour_map_polar,
@@ -67,6 +90,8 @@ __all__ = [
     "ncl_style",
     "create_projection",
     "create_map_axes",
+    "add_polar_labels",
+    "add_polar_boundary",
     "apply_plain_axis_ticks",
     "apply_gridliner_labels",
     "build_grid_locators",
@@ -98,11 +123,20 @@ __all__ = [
     "add_text",
     "add_vector_overlay",
     "add_vectors",
+    "add_region_box",
+    "add_box",
+    "add_stippling",
+    "add_stipple_overlay",
+    "overlay_stippling",
+    "overlay_stipple",
     "ScalarField",
     "MapPlot",
     "OverlayLayer",
     "ContourMapPlot",
     "PanelMapPlot",
+    "open_workstation",
+    "panel_map",
+    "contour_map",
     "SUPPORTED_RESOURCES",
     "list_supported_resources",
     "search_supported_resources",
@@ -110,12 +144,20 @@ __all__ = [
     "export_resource_compatibility",
     "print_supported_resources",
     "NclWorkstation",
+    "get_resource_compatibility",
+    "summarize_resource_compatibility",
+    "make_resource_compatibility_markdown",
+    "print_resource_compatibility_summary",
     "gsn_open_wks",
     "ncl_draw",
     "ncl_frame",
     "ncl_close",
     "draw",
     "frame",
+    "apply_gsn_workflow",
+    "apply_gsn_frame",
+    "apply_gsn_draw",
+    "apply_gsn_maximize",
     "gsn_csm_contour_map",
     "gsn_csm_contour_map_polar",
     "gsn_panel",

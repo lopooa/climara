@@ -22,7 +22,7 @@ def _apply_defaults(res, defaults):
     return out
 
 
-def gsn_csm_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
+def gsn_csm_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=None):
     defaults = {
         "cnFillOn": True,
         "cnLinesOn": False,
@@ -34,6 +34,7 @@ def gsn_csm_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
         "mpGridAndLimbOn": False,
         "lbLabelBarOn": True,
         "lbOrientation": "horizontal",
+        "pmLabelBarOrthogonalPosF": 0.135,
         "gsnAddCyclic": True,
         "gsnDraw": True,
         "gsnFrame": False,
@@ -48,6 +49,7 @@ def gsn_csm_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None):
         res=final_res,
         fig=fig,
         ax=ax,
+        wks=wks,
     )
 
 
@@ -59,6 +61,7 @@ def gsn_csm_contour_map_polar(
     hemisphere=None,
     fig=None,
     ax=None,
+    wks=None,
 ):
     final_res = _copy_res(res)
 
@@ -70,33 +73,48 @@ def gsn_csm_contour_map_polar(
 
     hemisphere = hemisphere.upper()
 
+    base_defaults = {
+        "mpProjection": "Stereographic",
+        "mpCenterLonF": 0,
+        "mpOutlineOn": True,
+        "mpGridAndLimbOn": True,
+        "mpGridLineColor": "0.65",
+        "mpGridLineThicknessF": 0.4,
+        "mpGridLineDashPattern": "--",
+        "mpPerimOn": True,
+        "mpPolarBoundaryOn": True,
+        "cnFillOn": True,
+        "cnLinesOn": False,
+        "lbLabelBarOn": True,
+        "lbOrientation": "horizontal",
+        "gsnAddCyclic": True,
+        "gsnDraw": True,
+        "gsnFrame": False,
+        "gsnPolar": True,
+        "gsnPolarLabelOn": True,
+        "gsnPolarLabelDistance": 1.08,
+        "gsnPolarLabelFontHeightF": 9.0,
+        "gsnPolarLongitudeLabelsOn": True,
+        "gsnPolarLatitudeLabelOn": True,
+        "gsnPolarLatitudeLabelPosition": "inside_bottom",
+        "gsnPolarClampBottomLabelsOn": True,
+        "gsnPolarBottomLabelYF": 0.025,
+        "mpPolarHideRectangularFrameOn": True,
+    }
+
     if hemisphere == "SH":
         defaults = {
-            "mpProjection": "Stereographic",
-            "mpCenterLonF": 0,
+            **base_defaults,
             "mpCenterLatF": -90,
             "mpMaxLatF": -20,
-            "cnFillOn": True,
-            "cnLinesOn": False,
-            "lbLabelBarOn": True,
-            "lbOrientation": "horizontal",
-            "gsnAddCyclic": True,
-            "gsnDraw": True,
-            "gsnFrame": False,
+            "gsnPolarLatitudeLabelString": "20°S",
         }
     else:
         defaults = {
-            "mpProjection": "Stereographic",
-            "mpCenterLonF": 0,
+            **base_defaults,
             "mpCenterLatF": 90,
             "mpMinLatF": 20,
-            "cnFillOn": True,
-            "cnLinesOn": False,
-            "lbLabelBarOn": True,
-            "lbOrientation": "horizontal",
-            "gsnAddCyclic": True,
-            "gsnDraw": True,
-            "gsnFrame": False,
+            "gsnPolarLatitudeLabelString": "20°N",
         }
 
     final_res = _apply_defaults(final_res, defaults)
@@ -108,6 +126,7 @@ def gsn_csm_contour_map_polar(
         res=final_res,
         fig=fig,
         ax=ax,
+        wks=wks,
     )
 
 
@@ -121,6 +140,7 @@ def gsn_panel(
     ncol=None,
     figsize=None,
     common_labelbar=True,
+    wks=None,
 ):
     if ncol is None:
         if nrow is not None:
@@ -137,6 +157,7 @@ def gsn_panel(
         ncols=ncol,
         figsize=figsize,
         common_labelbar=common_labelbar,
+        wks=wks,
     )
 
 
