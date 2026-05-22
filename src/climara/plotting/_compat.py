@@ -361,6 +361,64 @@ SUPPORTED_RESOURCES = [
         "file": "_maps.py",
         "notes": "Draw the polar edge-latitude label.",
     },
+
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLongitudeLabelPaddingF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Shared padding for polar longitude labels.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLongitudeLabelXPaddingF / gsnPolarLongitudeLabelYPaddingF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Separate horizontal and vertical padding for polar longitude labels.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarTopLongitudeLabelYF / gsnPolarBottomLongitudeLabelYF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Manual y positions for top and bottom polar longitude labels.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLeftLongitudeLabelXF / gsnPolarRightLongitudeLabelXF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Manual x positions for left and right polar longitude labels.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLatitudeLabelPosition",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Preset position for the polar edge-latitude label.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLatitudeLabelDistance",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Inner distance for the polar edge-latitude label.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLatitudeLabelXF / gsnPolarLatitudeLabelYF",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Manual axes-coordinate position for the polar edge-latitude label.",
+    },
+    {
+        "group": "GSN",
+        "resource": "gsnPolarLatitudeLabelString",
+        "status": "yes",
+        "file": "_maps.py",
+        "notes": "Custom text for the polar edge-latitude label.",
+    },
+
     # contour
     {
         "group": "ContourPlot",
@@ -788,6 +846,36 @@ SUPPORTED_RESOURCES = [
         "status": "yes",
         "file": "_panel.py",
         "notes": "Shared panel labelbar.",
+    },
+
+
+    {
+        "group": "Panel",
+        "resource": "gsnPanelRowSpec",
+        "status": "yes",
+        "file": "_panel.py",
+        "notes": "Enable NCL-style row-spec panel layout.",
+    },
+    {
+        "group": "Panel",
+        "resource": "gsnPanelRows / gsnPanelRowSpecValues / gsnPanelRowCounts",
+        "status": "yes",
+        "file": "_panel.py",
+        "notes": "Number of plots in each panel row, e.g. [2, 1, 2].",
+    },
+    {
+        "group": "Panel",
+        "resource": "gsnPanelCenter",
+        "status": "yes",
+        "file": "_panel.py",
+        "notes": "Center rows that contain fewer plots than the maximum row width.",
+    },
+    {
+        "group": "Panel",
+        "resource": "gsnPanelXGap / gsnPanelYGap",
+        "status": "yes",
+        "file": "_panel.py",
+        "notes": "Direct figure-coordinate horizontal and vertical gaps between panel plots.",
     },
 
     # gsn strings
