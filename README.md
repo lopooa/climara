@@ -58,4 +58,4 @@ Bug reports, suggestions, and examples are welcome.
 
 See the repository license file.
 
-Current version: `v0.1.1`
+Current version: `v0.3.0`
