@@ -908,34 +908,34 @@ def create_map_axes(fig=None, ax=None, mpres: dict | None = None, subplot=111):
 
     return fig, ax
 
-# climara v0.2.3 polar label override begin
+# climara v0.3.0 polar label override begin
 
-def _climara_override_is_polar_map(mpres=None):
+def _climara_polar_is_map(mpres=None):
     mpres = dict(mpres or {})
 
     if bool_resource(mpres, "gsnPolar", False):
         return True
 
-    proj = str(mpres.get("mpProjection", "")).lower()
+    key = _projection_key(mpres.get("mpProjection", ""))
 
-    if "stereo" not in proj:
+    if key != "stereographic":
         return False
 
     try:
-        center_lat = float(mpres.get("mpCenterLatF", 90.0))
+        center_lat = _infer_polar_latitude(mpres)
     except Exception:
-        center_lat = 90.0
+        center_lat = float(mpres.get("mpCenterLatF", 90.0))
 
     return abs(center_lat) >= 60.0
 
 
-def _climara_override_polar_hemisphere(mpres=None):
+def _climara_polar_hemisphere(mpres=None):
     mpres = dict(mpres or {})
 
     try:
-        center_lat = float(mpres.get("mpCenterLatF", 90.0))
+        center_lat = _infer_polar_latitude(mpres)
     except Exception:
-        center_lat = 90.0
+        center_lat = float(mpres.get("mpCenterLatF", 90.0))
 
     if center_lat < 0:
         return "SH"
@@ -943,7 +943,7 @@ def _climara_override_polar_hemisphere(mpres=None):
     return "NH"
 
 
-def _climara_override_format_lon(value):
+def _climara_polar_format_lon(value):
     value = float(value)
     value = ((value + 180.0) % 360.0) - 180.0
 
@@ -959,10 +959,9 @@ def _climara_override_format_lon(value):
     return f"{int(round(abs(value)))}°W"
 
 
-def _climara_override_format_lat(value):
+def _climara_polar_format_lat(value):
     value = float(value)
     hemi = "N" if value >= 0 else "S"
-
     value = abs(value)
 
     if abs(value - round(value)) < 1e-8:
@@ -971,9 +970,9 @@ def _climara_override_format_lat(value):
     return f"{value:g}°{hemi}"
 
 
-def _climara_override_polar_edge_lat(mpres=None):
+def _climara_polar_edge_lat(mpres=None):
     mpres = dict(mpres or {})
-    hemi = _climara_override_polar_hemisphere(mpres)
+    hemi = _climara_polar_hemisphere(mpres)
 
     if hemi == "SH":
         return float(mpres.get("mpMaxLatF", -20.0))
@@ -981,9 +980,9 @@ def _climara_override_polar_edge_lat(mpres=None):
     return float(mpres.get("mpMinLatF", 20.0))
 
 
-def _climara_override_polar_lon_labels(mpres=None):
+def _climara_polar_lon_labels(mpres=None):
     mpres = dict(mpres or {})
-    hemi = _climara_override_polar_hemisphere(mpres)
+    hemi = _climara_polar_hemisphere(mpres)
     center_lon = float(mpres.get("mpCenterLonF", 0.0))
 
     if hemi == "SH":
@@ -997,33 +996,78 @@ def _climara_override_polar_lon_labels(mpres=None):
     right = center_lon + 90.0
 
     return {
-        "top": _climara_override_format_lon(top),
-        "bottom": _climara_override_format_lon(bottom),
-        "left": _climara_override_format_lon(left),
-        "right": _climara_override_format_lon(right),
+        "top": _climara_polar_format_lon(top),
+        "bottom": _climara_polar_format_lon(bottom),
+        "left": _climara_polar_format_lon(left),
+        "right": _climara_polar_format_lon(right),
     }
 
 
+def _climara_polar_label_padding(mpres, axis):
+    if axis == "x":
+        return float(
+            mpres.get(
+                "gsnPolarLongitudeLabelXPaddingF",
+                mpres.get("gsnPolarLongitudeLabelPaddingF", 0.025),
+            )
+        )
+
+    return float(
+        mpres.get(
+            "gsnPolarLongitudeLabelYPaddingF",
+            mpres.get("gsnPolarLongitudeLabelPaddingF", 0.025),
+        )
+    )
+
+
 try:
-    _climara_original_add_map_features
+    _climara_v030_base_add_map_features
 except NameError:
-    _climara_original_add_map_features = add_map_features
+    _climara_v030_base_add_map_features = add_map_features
 
 
 def add_map_features(ax, mpres=None):
     mpres = dict(mpres or {})
 
-    if _climara_override_is_polar_map(mpres):
-        # polar labels are drawn manually by climara, not by Cartopy gridliner
+    if _climara_polar_is_map(mpres):
         mpres["mpGridLabelsOn"] = False
 
-    return _climara_original_add_map_features(ax, mpres)
+    return _climara_v030_base_add_map_features(ax, mpres)
+
+
+def _climara_clear_old_polar_labels(ax):
+    for old in list(getattr(ax, "texts", [])):
+        try:
+            if getattr(old, "_climara_polar_label", False):
+                old.remove()
+        except Exception:
+            pass
+
+
+def _climara_add_axes_text(ax, x, y, text, ha, va, fontsize, color, zorder, rotation=0.0):
+    artist = ax.text(
+        x,
+        y,
+        text,
+        transform=ax.transAxes,
+        ha=ha,
+        va=va,
+        fontsize=fontsize,
+        color=color,
+        rotation=rotation,
+        rotation_mode="anchor",
+        clip_on=False,
+        zorder=zorder,
+    )
+    artist._climara_polar_label = True
+
+    return artist
 
 
 def add_polar_labels(ax, mpres=None):
     mpres = dict(mpres or {})
 
-    if not _climara_override_is_polar_map(mpres):
+    if not _climara_polar_is_map(mpres):
         return []
 
     if not bool_resource(mpres, "gsnPolarLabelOn", True):
@@ -1038,20 +1082,17 @@ def add_polar_labels(ax, mpres=None):
     )
     zorder = float(mpres.get("gsnPolarLabelZOrder", 50.0))
 
-    # 先清理之前可能已经画出的 polar 手工标签
-    for old in list(getattr(ax, "texts", [])):
-        try:
-            if getattr(old, "_climara_polar_label", False):
-                old.remove()
-        except Exception:
-            pass
+    _climara_clear_old_polar_labels(ax)
 
-    labels = _climara_override_polar_lon_labels(mpres)
+    labels = _climara_polar_lon_labels(mpres)
 
-    top_y = float(mpres.get("gsnPolarTopLongitudeLabelYF", 1.035))
-    bottom_y = float(mpres.get("gsnPolarBottomLongitudeLabelYF", -0.035))
-    left_x = float(mpres.get("gsnPolarLeftLongitudeLabelXF", -0.045))
-    right_x = float(mpres.get("gsnPolarRightLongitudeLabelXF", 1.045))
+    xpad = _climara_polar_label_padding(mpres, "x")
+    ypad = _climara_polar_label_padding(mpres, "y")
+
+    top_y = float(mpres.get("gsnPolarTopLongitudeLabelYF", 1.0 + ypad))
+    bottom_y = float(mpres.get("gsnPolarBottomLongitudeLabelYF", -ypad))
+    left_x = float(mpres.get("gsnPolarLeftLongitudeLabelXF", -xpad))
+    right_x = float(mpres.get("gsnPolarRightLongitudeLabelXF", 1.0 + xpad))
 
     if bool_resource(mpres, "gsnPolarLongitudeLabelsOn", True):
         specs = [
@@ -1062,53 +1103,74 @@ def add_polar_labels(ax, mpres=None):
         ]
 
         for x, y, text, ha, va in specs:
-            artist = ax.text(
-                x,
-                y,
-                text,
-                transform=ax.transAxes,
-                ha=ha,
-                va=va,
-                fontsize=fontsize,
-                color=color,
-                rotation=0.0,
-                rotation_mode="anchor",
-                clip_on=False,
-                zorder=zorder,
+            artists.append(
+                _climara_add_axes_text(
+                    ax,
+                    x,
+                    y,
+                    text,
+                    ha,
+                    va,
+                    fontsize,
+                    color,
+                    zorder,
+                    rotation=float(mpres.get("gsnPolarLongitudeLabelAngleF", 0.0)),
+                )
             )
-            artist._climara_polar_label = True
-            artists.append(artist)
 
     if bool_resource(mpres, "gsnPolarLatitudeLabelOn", True):
-        edge_lat = _climara_override_polar_edge_lat(mpres)
+        edge_lat = _climara_polar_edge_lat(mpres)
         text = mpres.get(
             "gsnPolarLatitudeLabelString",
-            _climara_override_format_lat(edge_lat),
+            _climara_polar_format_lat(edge_lat),
         )
 
-        lat_x = float(mpres.get("gsnPolarLatitudeLabelXF", 0.5))
-        lat_y = float(mpres.get("gsnPolarLatitudeLabelYF", 0.105))
+        position = str(mpres.get("gsnPolarLatitudeLabelPosition", "inside_bottom")).lower()
+        distance = float(mpres.get("gsnPolarLatitudeLabelDistance", 0.12))
 
-        artist = ax.text(
-            lat_x,
-            lat_y,
-            str(text),
-            transform=ax.transAxes,
-            ha="center",
-            va="bottom",
-            fontsize=fontsize,
-            color=color,
-            rotation=0.0,
-            rotation_mode="anchor",
-            clip_on=False,
-            zorder=zorder,
+        if position in ["inside_bottom", "inner_bottom", "bottom_inside"]:
+            default_x, default_y = 0.5, distance
+            ha, va = "center", "bottom"
+        elif position in ["inside_top", "inner_top", "top_inside"]:
+            default_x, default_y = 0.5, 1.0 - distance
+            ha, va = "center", "top"
+        elif position == "bottom":
+            default_x, default_y = 0.5, -ypad
+            ha, va = "center", "top"
+        elif position == "top":
+            default_x, default_y = 0.5, 1.0 + ypad
+            ha, va = "center", "bottom"
+        elif position == "left":
+            default_x, default_y = -xpad, 0.5
+            ha, va = "right", "center"
+        elif position == "right":
+            default_x, default_y = 1.0 + xpad, 0.5
+            ha, va = "left", "center"
+        else:
+            default_x, default_y = 0.5, distance
+            ha, va = "center", "bottom"
+
+        lat_x = float(mpres.get("gsnPolarLatitudeLabelXF", default_x))
+        lat_y = float(mpres.get("gsnPolarLatitudeLabelYF", default_y))
+
+        artists.append(
+            _climara_add_axes_text(
+                ax,
+                lat_x,
+                lat_y,
+                str(text),
+                ha,
+                va,
+                fontsize,
+                color,
+                zorder,
+                rotation=float(mpres.get("gsnPolarLatitudeLabelAngleF", 0.0)),
+            )
         )
-        artist._climara_polar_label = True
-        artists.append(artist)
 
     return artists
 
-# climara v0.2.3 polar label override end
+# climara v0.3.0 polar label override end
 
 # climara v0.2.4 map resource override begin
 
