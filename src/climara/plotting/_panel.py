@@ -16,8 +16,80 @@ def _copy_res_without_labelbar(res):
     return new_res
 
 
-def _layout_rects(n, ncols, panel_res):
-    nrows = math.ceil(n / ncols)
+def _as_int_list(values):
+    if values is None:
+        return None
+
+    if isinstance(values, str):
+        values = values.replace(",", " ").split()
+
+    try:
+        return [int(v) for v in values]
+    except TypeError:
+        return [int(values)]
+
+
+def _panel_row_counts(n, ncols, panel_res):
+    ncols = max(1, int(ncols))
+
+    use_row_spec = bool_resource(panel_res, "gsnPanelRowSpec", False)
+
+    raw = panel_res.get(
+        "gsnPanelRows",
+        panel_res.get(
+            "gsnPanelRowSpecValues",
+            panel_res.get("gsnPanelRowCounts", None),
+        ),
+    )
+
+    if use_row_spec and raw is not None:
+        counts = _as_int_list(raw)
+        counts = [max(1, int(v)) for v in counts]
+
+        total = sum(counts)
+
+        if total < n:
+            base = max(counts) if counts else ncols
+            remaining = n - total
+
+            while remaining > 0:
+                value = min(base, remaining)
+                counts.append(value)
+                remaining -= value
+
+        return counts, True
+
+    counts = []
+    remaining = n
+
+    while remaining > 0:
+        value = min(ncols, remaining)
+        counts.append(value)
+        remaining -= value
+
+    return counts, False
+
+
+def _panel_layout_info(n, ncols, panel_res):
+    row_counts, row_spec = _panel_row_counts(n, ncols, panel_res)
+
+    if not row_counts:
+        return {
+            "rects": [],
+            "rows": [],
+            "cols": [],
+            "row_counts": [],
+            "ncols": max(1, int(ncols)),
+            "nrows": 0,
+            "row_spec": row_spec,
+        }
+
+    if row_spec:
+        slot_cols = max(row_counts)
+    else:
+        slot_cols = max(1, int(ncols))
+
+    nrows = len(row_counts)
 
     left = float(panel_res.get("gsnPanelLeft", 0.06))
     right = float(panel_res.get("gsnPanelRight", 0.96))
@@ -33,22 +105,55 @@ def _layout_rects(n, ncols, panel_res):
     if "gsnPanelYWhiteSpacePercent" in panel_res:
         ygap = (top - bottom) * float(panel_res["gsnPanelYWhiteSpacePercent"]) / 100.0
 
-    width = (right - left - xgap * (ncols - 1)) / ncols
+    width = (right - left - xgap * (slot_cols - 1)) / slot_cols
     height = (top - bottom - ygap * (nrows - 1)) / nrows
 
+    center_default = True if row_spec else False
+    center = bool_resource(panel_res, "gsnPanelCenter", center_default)
+
     rects = []
+    rows = []
+    cols = []
+    index = 0
 
-    for i in range(n):
-        row = i // ncols
-        col = i % ncols
+    for row, count in enumerate(row_counts):
+        count = int(count)
 
-        x0 = left + col * (width + xgap)
+        if count <= 0:
+            continue
+
+        row_width = count * width + max(0, count - 1) * xgap
+
+        if center and count < slot_cols:
+            row_left = left + ((right - left) - row_width) / 2.0
+        else:
+            row_left = left
+
         y0 = top - (row + 1) * height - row * ygap
 
-        rects.append([x0, y0, width, height])
+        for col in range(count):
+            if index >= n:
+                break
 
-    return rects
+            x0 = row_left + col * (width + xgap)
+            rects.append([x0, y0, width, height])
+            rows.append(row)
+            cols.append(col)
+            index += 1
 
+    return {
+        "rects": rects,
+        "rows": rows,
+        "cols": cols,
+        "row_counts": row_counts,
+        "ncols": slot_cols,
+        "nrows": nrows,
+        "row_spec": row_spec,
+    }
+
+
+def _layout_rects(n, ncols, panel_res):
+    return _panel_layout_info(n, ncols, panel_res)["rects"]
 
 def _bounds_from_axes(axes):
     xs0 = []
@@ -274,15 +379,22 @@ def _trim_inner_panel_lon_tick_values(res, col, ncols, panel_res):
     return res
 
 
-def _set_panel_tick_policy(res, i, ncols, nrows, panel_res):
+def _set_panel_tick_policy(res, i, ncols, nrows, panel_res, layout_info=None):
     if not bool_resource(panel_res, "gsnPanelAutoTickLabels", True):
         return res
 
-    row = i // ncols
-    col = i % ncols
+    if layout_info is not None:
+        row = layout_info["rows"][i]
+        col = layout_info["cols"][i]
+        row_ncols = layout_info["row_counts"][row]
+        nrows = layout_info["nrows"]
+    else:
+        row = i // ncols
+        col = i % ncols
+        row_ncols = ncols
 
     left_on = bool_resource(panel_res, "gsnPanelLeftLabelsOn", True) and col == 0
-    right_on = bool_resource(panel_res, "gsnPanelRightLabelsOn", False) and col == ncols - 1
+    right_on = bool_resource(panel_res, "gsnPanelRightLabelsOn", False) and col == row_ncols - 1
     bottom_on = bool_resource(panel_res, "gsnPanelBottomLabelsOn", True) and row == nrows - 1
     top_on = bool_resource(panel_res, "gsnPanelTopLabelsOn", False) and row == 0
 
@@ -296,10 +408,9 @@ def _set_panel_tick_policy(res, i, ncols, nrows, panel_res):
     res["mpGridBottomLabelsOn"] = bottom_on
     res["mpGridTopLabelsOn"] = top_on
 
-    res = _trim_inner_panel_lon_tick_values(res, col, ncols, panel_res)
+    res = _trim_inner_panel_lon_tick_values(res, col, row_ncols, panel_res)
 
     return res
-
 
 def _iter_gridliner_label_artists(gl):
     if gl is None:
@@ -573,27 +684,35 @@ def ncl_panel_maps(
     mpres = {**mpres, **tmres}
 
     n = len(data_list)
-    nrows = math.ceil(n / ncols)
+    layout_info = _panel_layout_info(n, ncols, panel_res)
+    rects = layout_info["rects"]
+    ncols = layout_info["ncols"]
+    nrows = layout_info["nrows"]
 
     if figsize is None:
         figsize = (4.2 * ncols, 3.6 * nrows)
 
     fig = plt.figure(figsize=figsize)
 
-    rects = _layout_rects(n, ncols, panel_res)
     axes = []
     results = []
 
     plot_res = _copy_res_without_labelbar(res)
     plot_res["gsnFrame"] = False
 
-
     for i, data in enumerate(data_list):
         projection = create_projection(mpres)
         ax = fig.add_axes(rects[i], projection=projection)
 
         this_res = dict(plot_res)
-        this_res = _set_panel_tick_policy(this_res, i, ncols, nrows, panel_res)
+        this_res = _set_panel_tick_policy(
+            this_res,
+            i,
+            ncols,
+            nrows,
+            panel_res,
+            layout_info=layout_info,
+        )
 
         if titles is not None:
             this_res["tiMainString"] = titles[i]
@@ -658,6 +777,7 @@ def ncl_panel_maps(
         "colorbar": cbar,
         "figure_string_artists": figure_string_artists,
         "title_artists": title_artists,
+        "panel_layout": layout_info,
         "groups": groups,
     }
 
