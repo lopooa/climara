@@ -11,7 +11,7 @@ from ._compat import (
 from ._resources import split_resources, resolve_contour_levels, bool_resource, merge_resources, NclResources
 from ._colors import read_rgb_colormap, get_colormap
 from ._style import ncl_style
-from ._maps import create_projection, create_map_axes, add_polar_labels, add_polar_boundary, add_polar_boundary, add_polar_labels
+from ._maps import create_projection, create_map_axes, add_polar_labels, add_polar_boundary
 from ._tickmark import build_grid_locators, apply_gridliner_labels, apply_plain_axis_ticks
 from ._contour import ncl_contour_map
 from ._panel import ncl_panel_maps
@@ -48,7 +48,7 @@ from ._overlay import (
     add_box,
     add_region_box,
 )
-from ._objects import ScalarField, OverlayLayer, MapPlot, ContourMapPlot, PanelMapPlot
+from ._objects import ScalarField, OverlayLayer, MapPlot, ContourMapPlot, PanelMapPlot, contour_map, panel_map, open_workstation
 from ._compat import (
     SUPPORTED_RESOURCES,
     list_supported_resources,

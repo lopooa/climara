@@ -168,21 +168,76 @@ class MapPlot:
         return self.save(filename)
 
 
-@dataclass
+@dataclass(init=False)
 class ContourMapPlot(MapPlot):
-    """Object-oriented wrapper around gsn_csm_contour_map."""
+    def __init__(
+        self,
+        field: ScalarField | object | None = None,
+        res: dict | None = None,
+        fig: object | None = None,
+        ax: object | None = None,
+        wks: NclWorkstation | None = None,
+        overlays: list | None = None,
+    ):
+        self.res = _copy_res(res)
+        self.fig = fig
+        self.ax = ax
+        self.wks = wks
+        self.field = self._normalize_field(field)
+        self.out = None
+        self.overlays = list(overlays or [])
 
-    field: ScalarField | object = None
-    out: dict | None = None
-    overlays: list = dataclass_field(default_factory=list)
+    @staticmethod
+    def _normalize_field(field):
+        if field is None:
+            return None
 
-    def __post_init__(self):
-        if not isinstance(self.field, ScalarField):
-            self.field = ScalarField(self.field)
+        if isinstance(field, ScalarField):
+            return field
 
-        self.res = _copy_res(self.res)
+        return ScalarField(field)
 
-    def draw(self, res=None, fig=None, ax=None, wks=None):
+    @staticmethod
+    def _looks_like_resource_dict(value):
+        if not isinstance(value, dict):
+            return False
+
+        prefixes = (
+            "cn",
+            "mp",
+            "lb",
+            "pm",
+            "ti",
+            "tm",
+            "vp",
+            "gsn",
+            "tx",
+            "gs",
+            "vc",
+            "sf",
+            "tr",
+        )
+
+        return any(str(key).startswith(prefixes) for key in value)
+
+    def set_field(self, field):
+        self.field = self._normalize_field(field)
+
+        return self
+
+    def draw(self, field=None, res=None, fig=None, ax=None, wks=None):
+        if field is not None:
+            if self._looks_like_resource_dict(field) and res is None and self.field is not None:
+                res = field
+            else:
+                self.field = self._normalize_field(field)
+
+        if self.field is None:
+            raise ValueError(
+                "No field/data was provided. Use ContourMapPlot(field, ...), "
+                "ContourMapPlot(field=field, ...), or plot.draw(field)."
+            )
+
         final_res = _copy_res(self.res)
         final_res.update(_copy_res(res))
 
@@ -278,7 +333,6 @@ class ContourMapPlot(MapPlot):
             lat=self.field.lat if lat is None else lat,
             res=res,
         )
-
 
 @dataclass
 class PanelMapPlot:
