@@ -28,6 +28,7 @@ from .dimavgwgt import (
     sqrt_coslat_weights,
 )
 from .linint2 import linint1, linint1_n, linint2, linint2_points, area_hi2lores
+from .time import clm_mon, calc_mon_anom, month_to_season
 
 
 __all__ = [
@@ -75,4 +76,7 @@ __all__ = [
     "linint2",
     "linint2_points",
     "area_hi2lores",
+    "clm_mon",
+    "calc_mon_anom",
+    "month_to_season",
 ]
