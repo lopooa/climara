@@ -1,26 +1,78 @@
 """NCL-style numerical function layer.
 
-This subpackage follows the function-family organization of NCL's
-``ni/src/lib/nfp`` and ``ni/src/lib/nfpfort`` sources, while implementing the
-algorithms in pure Python.
+The module names and public function names follow NCL's numerical function
+families where practical, while implementations are written in Python.
 """
 
-from .eof import eofunc, eofunc_ts
-from .stat import dim_standardize, remove_monthly_climatology, calc_monthly_anomaly
-from .dtrend import dtrend, lintrend, lintrend_total
-from .regcoef import regcoef
-from .covcorm import escorc, pattern_cor, pattern_cor_weighted
-from .dimavgwgt import dim_avg_wgt, coslat_weights, sqrt_coslat_weights
-from .runave import runave, wrunave, running_mean_3
-from .linint2 import linint2, linint2_like, interpolate_like
+from .runave import runave, runave_n, wgt_runave, wgt_runave_n
+from .stat import (
+    dim_rmvmean,
+    dim_rmvmean_n,
+    dim_standardize,
+    dim_standardize_n,
+    dim_rmsd,
+    dim_rmsd_n,
+    dim_stat4,
+    dim_stat4_n,
+)
+from .eof import eofunc, eofunc_n, eofunc_ts, eofunc_ts_n, eofcov, eofcor, eof2data
+from .dtrend import dtrend, dtrend_n, dtrend_msg, dtrend_msg_n, dtrend_quadratic
+from .regcoef import regcoef, regcoef_n, regline, reg_multlin
+from .covcorm import covcorm, covcorm_xy, escorc, esccr, pattern_cor
+from .dimavgwgt import (
+    dim_avg_wgt,
+    dim_avg_wgt_n,
+    dim_sum_wgt,
+    dim_sum_wgt_n,
+    coslat_weights,
+    sqrt_coslat_weights,
+)
+from .linint2 import linint1, linint1_n, linint2, linint2_points, area_hi2lores
+
 
 __all__ = [
-    "eofunc", "eofunc_ts",
-    "dim_standardize", "remove_monthly_climatology", "calc_monthly_anomaly",
-    "dtrend", "lintrend", "lintrend_total",
+    "runave",
+    "runave_n",
+    "wgt_runave",
+    "wgt_runave_n",
+    "dim_rmvmean",
+    "dim_rmvmean_n",
+    "dim_standardize",
+    "dim_standardize_n",
+    "dim_rmsd",
+    "dim_rmsd_n",
+    "dim_stat4",
+    "dim_stat4_n",
+    "eofunc",
+    "eofunc_n",
+    "eofunc_ts",
+    "eofunc_ts_n",
+    "eofcov",
+    "eofcor",
+    "eof2data",
+    "dtrend",
+    "dtrend_n",
+    "dtrend_msg",
+    "dtrend_msg_n",
+    "dtrend_quadratic",
     "regcoef",
-    "escorc", "pattern_cor", "pattern_cor_weighted",
-    "dim_avg_wgt", "coslat_weights", "sqrt_coslat_weights",
-    "runave", "wrunave", "running_mean_3",
-    "linint2", "linint2_like", "interpolate_like",
+    "regcoef_n",
+    "regline",
+    "reg_multlin",
+    "covcorm",
+    "covcorm_xy",
+    "escorc",
+    "esccr",
+    "pattern_cor",
+    "dim_avg_wgt",
+    "dim_avg_wgt_n",
+    "dim_sum_wgt",
+    "dim_sum_wgt_n",
+    "coslat_weights",
+    "sqrt_coslat_weights",
+    "linint1",
+    "linint1_n",
+    "linint2",
+    "linint2_points",
+    "area_hi2lores",
 ]
