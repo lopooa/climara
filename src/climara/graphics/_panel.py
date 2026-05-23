@@ -663,6 +663,101 @@ def _add_panel_row_col_titles(fig, axes, ncols, panel_res):
     return artists
 
 
+
+def _as_panel_sequence(value, n, name):
+    if value is None:
+        return None
+
+    if isinstance(value, (str, bytes)):
+        raise TypeError(f"{name} must be a number or a sequence of numbers")
+
+    try:
+        values = list(value)
+    except TypeError:
+        values = [value] * n
+
+    if len(values) != n:
+        raise ValueError(f"{name} must have length {n}, got {len(values)}")
+
+    return [float(v) for v in values]
+
+
+def _apply_manual_panel_positions(rects, panel_res):
+    """Apply NCL-style gsnPanelXF / gsnPanelYF manual viewport positions.
+
+    In NCL, vpXF and vpYF describe the upper-left corner of a plot viewport.
+    Matplotlib add_axes uses [left, bottom, width, height], so y is converted
+    with bottom = vpYF - height.
+    """
+    n = len(rects)
+    x_values = _as_panel_sequence(panel_res.get("gsnPanelXF"), n, "gsnPanelXF")
+    y_values = _as_panel_sequence(panel_res.get("gsnPanelYF"), n, "gsnPanelYF")
+
+    if x_values is None and y_values is None:
+        return rects
+
+    new_rects = []
+
+    for i, rect in enumerate(rects):
+        left, bottom, width, height = rect
+
+        if x_values is not None:
+            left = x_values[i]
+
+        if y_values is not None:
+            bottom = y_values[i] - height
+
+        new_rects.append([left, bottom, width, height])
+
+    return new_rects
+
+
+def _print_panel_debug(rects, layout_info, panel_res):
+    """Print NCL-style panel viewport diagnostics."""
+    if not bool(panel_res.get("gsnPanelDebug", False)):
+        return
+
+    print("")
+    print("climara.graphics gsn_panel debug")
+    print("--------------------------------")
+    print(f"nplots : {len(rects)}")
+    print(f"nrows  : {layout_info.get('nrows')}")
+    print(f"ncols  : {layout_info.get('ncols')}")
+
+    for key in [
+        "gsnPanelTop",
+        "gsnPanelBottom",
+        "gsnPanelLeft",
+        "gsnPanelRight",
+        "gsnPanelXWhiteSpacePercent",
+        "gsnPanelYWhiteSpacePercent",
+        "gsnPanelXGap",
+        "gsnPanelYGap",
+    ]:
+        if key in panel_res:
+            print(f"{key}: {panel_res[key]}")
+
+    print("")
+    print("plot viewport positions")
+    print("index  left/vpXF   top/vpYF    width       height      bottom")
+    print("-----  ---------   --------    -----       ------      ------")
+
+    for i, rect in enumerate(rects):
+        left, bottom, width, height = rect
+        top = bottom + height
+
+        print(
+            f"{i:>5}  "
+            f"{left:>9.4f}   "
+            f"{top:>8.4f}    "
+            f"{width:>7.4f}     "
+            f"{height:>7.4f}     "
+            f"{bottom:>7.4f}"
+        )
+
+    print("")
+
+
 def ncl_panel_maps(
     data_list,
     lon=None,
@@ -689,6 +784,11 @@ def ncl_panel_maps(
     rects = layout_info["rects"]
     ncols = layout_info["ncols"]
     nrows = layout_info["nrows"]
+
+    rects = _apply_manual_panel_positions(rects, panel_res)
+    layout_info = {**layout_info, "rects": rects}
+
+    _print_panel_debug(rects, layout_info, panel_res)
 
     if figsize is None:
         figsize = (4.2 * ncols, 3.6 * nrows)
