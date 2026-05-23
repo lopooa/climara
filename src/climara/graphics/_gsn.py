@@ -141,6 +141,7 @@ def gsn_panel(
     figsize=None,
     common_labelbar=True,
     wks=None,
+    panel_res_list=None,
 ):
     if ncol is None:
         if nrow is not None:
@@ -158,6 +159,7 @@ def gsn_panel(
         figsize=figsize,
         common_labelbar=common_labelbar,
         wks=wks,
+        panel_res_list=panel_res_list,
     )
 
 

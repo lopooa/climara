@@ -673,6 +673,7 @@ def ncl_panel_maps(
     figsize=None,
     common_labelbar=True,
     wks=None,
+    panel_res_list=None,
 ):
     groups = split_resources(res)
     panel_res = groups["gsn"]
@@ -700,11 +701,33 @@ def ncl_panel_maps(
     plot_res = _copy_res_without_labelbar(res)
     plot_res["gsnFrame"] = False
 
+    if panel_res_list is None:
+        panel_res_list = [None] * n
+
+    if len(panel_res_list) != n:
+        raise ValueError(
+            "panel_res_list must have the same length as data_list "
+            f"({len(panel_res_list)} != {n})"
+        )
+
     for i, data in enumerate(data_list):
-        projection = create_projection(mpres)
+        this_res = dict(plot_res)
+
+        panel_specific_res = panel_res_list[i]
+
+        if panel_specific_res is not None:
+            this_res.update(_copy_res_without_labelbar(panel_specific_res))
+            this_res["gsnFrame"] = False
+
+        this_groups = split_resources(this_res)
+        this_mpres = {
+            **this_groups["map"],
+            **this_groups["tickmark"],
+        }
+
+        projection = create_projection(this_mpres)
         ax = fig.add_axes(rects[i], projection=projection)
 
-        this_res = dict(plot_res)
         this_res = _set_panel_tick_policy(
             this_res,
             i,
@@ -778,6 +801,7 @@ def ncl_panel_maps(
         "figure_string_artists": figure_string_artists,
         "title_artists": title_artists,
         "panel_layout": layout_info,
+        "panel_res_list": panel_res_list,
         "groups": groups,
     }
 
