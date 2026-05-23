@@ -1,4 +1,4 @@
-from climara.plotting import (
+from climara.graphics import (
     export_resource_compatibility,
     list_supported_resources,
     search_supported_resources,

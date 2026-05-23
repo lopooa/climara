@@ -159,14 +159,14 @@ def print_projection_aliases():
         print(f"{key} -> {value}")
 '''
 
-write_text("src/climara/plotting/_ncl_resources.py", ncl_resources)
+write_text("src/climara/graphics/_ncl_resources.py", ncl_resources)
 
 
 demo = r'''
 import numpy as np
 import matplotlib.pyplot as plt
 
-from climara.plotting import ncl_style, gsn_csm_contour_map
+from climara.graphics import ncl_style, gsn_csm_contour_map
 
 
 ncl_style()
@@ -312,16 +312,16 @@ v0.3.4 不继续堆大功能，而是补两个辅助内容：
 ## 新增模块
 
 ```text
-src/climara/plotting/_ncl_resources.py
+src/climara/graphics/_ncl_resources.py
 ```
 
 新增公开函数：
 
 ```python
-from climara.plotting import resource_groups
-from climara.plotting import print_resource_groups
-from climara.plotting import projection_aliases
-from climara.plotting import print_projection_aliases
+from climara.graphics import resource_groups
+from climara.graphics import print_resource_groups
+from climara.graphics import projection_aliases
+from climara.graphics import print_projection_aliases
 ```
 
 ## 新增示例
@@ -352,9 +352,9 @@ if init_path.exists():
     if "from ._ncl_resources import" not in init_text:
         init_text = init_text.rstrip() + "\n" + line
         init_path.write_text(init_text, encoding="utf-8")
-        print("已更新：src/climara/plotting/__init__.py")
+        print("已更新：src/climara/graphics/__init__.py")
     else:
-        print("未变化：src/climara/plotting/__init__.py")
+        print("未变化：src/climara/graphics/__init__.py")
 
 
 replace_file(

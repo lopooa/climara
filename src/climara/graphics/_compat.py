@@ -1282,7 +1282,7 @@ def make_resource_compatibility_markdown(title="NCL Resource Compatibility"):
     lines = [
         f"# {title}",
         "",
-        "This file is generated from `src/climara/plotting/_compat.py`.",
+        "This file is generated from `src/climara/graphics/_compat.py`.",
         "",
         "## Summary",
         "",

@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 
-from climara.plotting import ncl_style, gsn_csm_contour_map
+from climara.graphics import ncl_style, gsn_csm_contour_map
 
 ncl_style()
 

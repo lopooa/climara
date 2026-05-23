@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from climara.plotting import (
+from climara.graphics import (
     ncl_style,
     gsn_open_wks,
     gsn_csm_contour_map,

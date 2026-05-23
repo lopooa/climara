@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from climara.plotting import (
+from climara.graphics import (
     ContourMapPlot,
     PanelMapPlot,
     ScalarField,

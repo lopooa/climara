@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from climara.plotting import ncl_style, gsn_panel, add_hatching
+from climara.graphics import ncl_style, gsn_panel, add_hatching
 
 ncl_style()
 

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 
-from climara.plotting import (
+from climara.graphics import (
     ncl_style,
     create_projection,
     gsn_csm_contour_map,

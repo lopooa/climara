@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from climara.plotting import ncl_style, gsn_csm_contour_map, overlay_contour, overlay_markers, overlay_text, overlay_polyline
+from climara.graphics import ncl_style, gsn_csm_contour_map, overlay_contour, overlay_markers, overlay_text, overlay_polyline
 
 ncl_style()
 

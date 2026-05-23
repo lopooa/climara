@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from climara.plotting import (
+from climara.graphics import (
     export_resource_compatibility,
     print_resource_compatibility_summary,
     search_supported_resources,

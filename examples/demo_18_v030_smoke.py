@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 from climara import __version__
-from climara.plotting import (
+from climara.graphics import (
     ncl_style,
     gsn_csm_contour_map,
     ScalarField,
