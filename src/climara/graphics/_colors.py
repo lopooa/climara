@@ -8,6 +8,48 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 
 
+def ncl_color_to_mpl(value):
+    """Convert common NCL color names to Matplotlib-compatible colors.
+
+    Examples
+    --------
+    gray42 -> "0.42"
+    grey70 -> "0.7"
+    transparent -> "none"
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (tuple, list)):
+        return value
+
+    text = str(value).strip()
+    key = text.replace("_", "").replace("-", "").replace(" ", "").lower()
+
+    if key in ["none", "transparent", "no", "false", "off"]:
+        return "none"
+
+    for prefix in ["gray", "grey"]:
+        if not key.startswith(prefix):
+            continue
+
+        number = key[len(prefix):]
+
+        try:
+            gray = float(number)
+        except ValueError:
+            continue
+
+        if gray > 1.0:
+            gray = gray / 100.0
+
+        gray = min(max(gray, 0.0), 1.0)
+
+        return f"{gray:g}"
+
+    return text
+
+
 def _parse_rgb_line(line: str):
     line = line.strip()
 

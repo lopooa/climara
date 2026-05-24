@@ -964,3 +964,127 @@ add_box = overlay_box
 add_region_box = overlay_box
 
 # climara v0.2.6 overlay resource override end
+
+
+# Primitive / overlay management
+# This section is backend independent except for functions ending with _mpl.
+
+def get_plot_primitives(plotid):
+    """Return the primitive list attached to a plot-like object."""
+    if isinstance(plotid, dict):
+        return plotid.setdefault("primitives", [])
+
+    if not hasattr(plotid, "primitives"):
+        plotid.primitives = []
+
+    return plotid.primitives
+
+
+def add_plot_primitive(plotid, primitive):
+    """Attach a primitive to a plot-like object."""
+    primitives = get_plot_primitives(plotid)
+    primitives.append(primitive)
+    return primitive
+
+
+def get_plot_primitive_artists(plotid):
+    """Return temporary Matplotlib artists for primitives."""
+    if isinstance(plotid, dict):
+        return plotid.setdefault("_primitive_artists", [])
+
+    if not hasattr(plotid, "_primitive_artists"):
+        plotid._primitive_artists = []
+
+    return plotid._primitive_artists
+
+
+def clear_plot_primitive_artists_mpl(plotid):
+    """Remove temporary Matplotlib primitive artists."""
+    artists = get_plot_primitive_artists(plotid)
+
+    for artist in list(artists):
+        try:
+            if artist is not None:
+                artist.remove()
+        except Exception:
+            pass
+
+    artists.clear()
+
+
+def get_plot_axes(plotid):
+    """Return the temporary Matplotlib axes from a plot-like object."""
+    if hasattr(plotid, "plot"):
+        return plotid
+
+    if isinstance(plotid, dict):
+        return plotid.get("ax", None)
+
+    return getattr(plotid, "ax", None)
+
+
+def _draw_order_value(primitive):
+    order = str(getattr(primitive, "draw_order", "draw")).lower()
+
+    mapping = {
+        "predraw": 0,
+        "pre": 0,
+        "background": 0,
+        "draw": 10,
+        "duringdraw": 10,
+        "postdraw": 20,
+        "post": 20,
+        "foreground": 20,
+    }
+
+    return mapping.get(order, 10)
+
+
+def render_plot_overlays_mpl(plotid, clear_existing=True):
+    """Render stored plot primitives on a temporary Matplotlib axes.
+
+    The primitive list is the authoritative state. Matplotlib artists are only
+    the current backend bridge.
+    """
+    ax = get_plot_axes(plotid)
+
+    if ax is None:
+        return []
+
+    if clear_existing:
+        clear_plot_primitive_artists_mpl(plotid)
+
+    primitives = sorted(get_plot_primitives(plotid), key=_draw_order_value)
+
+    artists = []
+
+    for primitive in primitives:
+        if getattr(primitive, "coord_system", "data") != "data":
+            continue
+
+        name = primitive.__class__.__name__.lower()
+
+        if "polyline" in name:
+            from ._polyline import draw_polyline_data_mpl
+            artist = draw_polyline_data_mpl(ax, primitive)
+        elif "marker" in name:
+            from ._polymarker import draw_marker_data_mpl
+            artist = draw_marker_data_mpl(ax, primitive)
+        elif "polygon" in name:
+            from ._render_mpl import draw_polygon_data_mpl
+            artist = draw_polygon_data_mpl(ax, primitive)
+        else:
+            continue
+
+        primitive.resources["_mpl_artist"] = artist
+        artists.append(artist)
+
+    get_plot_primitive_artists(plotid).extend(artists)
+
+    return artists
+
+
+def redraw_plot_overlays_mpl(plotid):
+    """Redraw all temporary Matplotlib overlay artists for a plot."""
+    return render_plot_overlays_mpl(plotid, clear_existing=True)
+

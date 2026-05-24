@@ -8,6 +8,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 from ._resources import bool_resource
+from ._colors import ncl_color_to_mpl
 from ._tickmark import apply_gridliner_labels, apply_plain_axis_ticks, build_grid_locators
 import matplotlib.patches as mpatches
 
@@ -1417,6 +1418,17 @@ def _v024_apply_map_perimeter(ax, mpres):
     return artists
 
 
+def _normalize_map_color_resources(mpres):
+    """Normalize NCL-style map color resources before passing them to Matplotlib."""
+    mpres = dict(mpres or {})
+
+    for key, value in list(mpres.items()):
+        if key.endswith("Color") or "Color" in key:
+            mpres[key] = ncl_color_to_mpl(value)
+
+    return mpres
+
+
 try:
     _climara_v024_base_add_map_features
 except NameError:
@@ -1426,6 +1438,7 @@ except NameError:
 def add_map_features(ax, mpres=None):
     """Add map features with additional NCL-style MapPlot resources."""
     mpres = _v024_expand_outline_boundary_sets(dict(mpres or {}))
+    mpres = _normalize_map_color_resources(mpres)
 
     artists = {
         "fills": [],

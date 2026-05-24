@@ -9,7 +9,7 @@ from ._colors import get_colormap
 from ._labelbar import add_labelbar
 from ._maps import create_map_axes
 from ._resources import bool_resource, resolve_contour_levels, split_resources
-from ._strings import add_gsn_strings
+from ._strings import add_gsn_strings, create_ti_main_text_item, draw_text_item_mpl
 from ._utils import maybe_add_cyclic, mesh_lon_lat
 from ._workflow import apply_gsn_workflow
 
@@ -580,28 +580,14 @@ def _add_info_label(ax, arr, levels, cnres, is_constant):
 
 
 def _add_title(ax, tires, gsnres):
-    if "tiMainString" not in tires:
-        return None
+    item = create_ti_main_text_item(tires, gsnres)
 
-    has_gsn_strings = any(
-        key in gsnres
-        for key in ["gsnLeftString", "gsnCenterString", "gsnRightString"]
-    )
+    if item is None:
+        return None, None
 
-    default_y = 1.12 if has_gsn_strings else None
+    artist = draw_text_item_mpl(ax, item)
 
-    kwargs = {
-        "label": tires["tiMainString"],
-        "fontsize": float(tires.get("tiMainFontHeightF", 11)),
-        "pad": float(tires.get("tiMainOffsetYF", 6)),
-    }
-
-    if "tiMainYF" in tires:
-        kwargs["y"] = float(tires["tiMainYF"])
-    elif default_y is not None:
-        kwargs["y"] = default_y
-
-    return ax.set_title(**kwargs)
+    return artist, item
 
 
 def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=None):
@@ -621,36 +607,36 @@ def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=N
 
     mpres = {**mpres, **tmres}
 
+    polar_keys = [
+        "gsnPolar",
+        "gsnPolarLabelOn",
+        "gsnPolarLabelDistance",
+        "gsnPolarLabelFontHeightF",
+        "gsnPolarLabelFontColor",
+        "gsnPolarLongitudeLabelsOn",
+        "gsnPolarLongitudeLabelValues",
+        "gsnPolarLatitudeLabelOn",
+        "gsnPolarLatitudeLabelString",
+        "gsnPolarLatitudeLabelPosition",
+        "gsnPolarLatitudeLabelDistance",
+        "gsnPolarBoundaryOn",
+        "mpPolarHideRectangularFrameOn",
+        "gsnPolarBottomLabelYF",
+        "gsnPolarClampBottomLabelsOn",
+        "gsnPolarLatitudeLabelYF",
+    ]
+
+    for key in polar_keys:
+        if key in gsnres:
+            mpres[key] = gsnres[key]
+
+    if "gsnPolarBoundaryOn" in gsnres:
+        mpres["mpPolarBoundaryOn"] = gsnres["gsnPolarBoundaryOn"]
+
+    if "mpPolarHideRectangularFrameOn" in gsnres:
+        mpres["mpPolarHideRectangularFrameOn"] = gsnres["mpPolarHideRectangularFrameOn"]
+
     if bool_resource(gsnres, "gsnPolar", False):
-        polar_keys = [
-            "gsnPolar",
-            "gsnPolarLabelOn",
-            "gsnPolarLabelDistance",
-            "gsnPolarLabelFontHeightF",
-            "gsnPolarLabelFontColor",
-            "gsnPolarLongitudeLabelsOn",
-            "gsnPolarLongitudeLabelValues",
-            "gsnPolarLatitudeLabelOn",
-            "gsnPolarLatitudeLabelString",
-            "gsnPolarLatitudeLabelPosition",
-            "gsnPolarLatitudeLabelDistance",
-            "gsnPolarBoundaryOn",
-            "mpPolarHideRectangularFrameOn",
-            "gsnPolarBottomLabelYF",
-            "gsnPolarClampBottomLabelsOn",
-            "gsnPolarLatitudeLabelYF",
-        ]
-
-        for key in polar_keys:
-            if key in gsnres:
-                mpres[key] = gsnres[key]
-
-        if "gsnPolarBoundaryOn" in gsnres:
-            mpres["mpPolarBoundaryOn"] = gsnres["gsnPolarBoundaryOn"]
-
-        if "mpPolarHideRectangularFrameOn" in gsnres:
-            mpres["mpPolarHideRectangularFrameOn"] = gsnres["mpPolarHideRectangularFrameOn"]
-
         mpres.setdefault("mpPolarBoundaryOn", True)
         mpres.setdefault("mpPolarHideRectangularFrameOn", True)
 
@@ -700,8 +686,8 @@ def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=N
     const_value, _, _ = _finite_minmax(arr)
     constant_label = _add_constant_label(ax, const_value, cnres, is_constant)
     info_label = _add_info_label(ax, arr, levels, cnres, is_constant)
-    title_artist = _add_title(ax, tires, gsnres)
-    string_artists = add_gsn_strings(ax, gsnres)
+    title_artist, title_item = _add_title(ax, tires, gsnres)
+    string_artists, string_items = add_gsn_strings(ax, gsnres, return_items=True)
 
     cbar = None
 
@@ -709,6 +695,8 @@ def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=N
         cbar = add_labelbar(fig, ax, mappable, lbres, pmres=pmres)
 
     out = {
+        "fig": fig,
+        "ax": ax,
         "mappable": mappable,
         "contour": contour_lines,
         "contour_lines": contour_lines,
@@ -717,7 +705,10 @@ def ncl_contour_map(data, lon=None, lat=None, res=None, fig=None, ax=None, wks=N
         "constant_label": constant_label,
         "info_label": info_label,
         "title_artist": title_artist,
+        "title_item": title_item,
         "string_artists": string_artists,
+        "string_items": string_items,
+        "text_items": [item for item in [title_item, *string_items] if item is not None],
         "levels": levels,
         "is_constant": is_constant,
         "fill_method": fill_method,

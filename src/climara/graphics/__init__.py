@@ -1,3 +1,11 @@
+from ._legend_ndc import gsn_panel_pattern_legend_ndc
+from ._polygon import gsn_add_polygon, gsn_polygon_ndc
+from ._render_mpl import render_ndc_primitives_mpl
+from ._labelbar_object import HluLabelBar, build_hlu_labelbar
+from ._polymarker import gsn_add_polymarker, gsn_polymarker_ndc
+from ._overlay import get_plot_primitives, add_plot_primitive, render_plot_overlays_mpl, redraw_plot_overlays_mpl
+from ._primitive import HluPrimitive, HluPolyline, HluPolygon, HluMarker
+from ._polyline import gsn_add_polyline, gsn_polyline_ndc, render_plot_primitives_mpl, redraw_plot_primitives_mpl
 from ._compat import (
     SUPPORTED_RESOURCES,
     get_resource_compatibility,
@@ -18,6 +26,8 @@ from ._panel import ncl_panel_maps
 from ._hatching import add_hatching, add_stipple
 from ._labelbar import add_labelbar, gsn_labelbar
 from ._strings import add_gsn_strings
+from ._text_item import HluTextItem
+from ._ndc import gsn_create_text_ndc, gsn_text_ndc
 from ._overlay import (
     overlay_contour,
     overlay_filled_contour,
@@ -162,5 +172,29 @@ __all__ = [
     "gsn_csm_contour_map_polar",
     "gsn_panel",
     "gsn_panel_maps",
+    "gsn_text_ndc",
+    "gsn_create_text_ndc",
+    "HluTextItem",
+    "HluPrimitive",
+    "HluPolyline",
+    "HluPolygon",
+    "HluMarker",
+    "gsn_add_polyline",
+    "gsn_polyline_ndc",
+    "redraw_plot_primitives_mpl",
+    "render_plot_primitives_mpl",
+    "get_plot_primitives",
+    "add_plot_primitive",
+    "render_plot_overlays_mpl",
+    "redraw_plot_overlays_mpl",
+    "gsn_add_polymarker",
+    "gsn_polymarker_ndc",
+    "HluLabelBar",
+    "build_hlu_labelbar",
+    "render_ndc_primitives_mpl",
+    "gsn_add_polygon",
+    "gsn_polygon_ndc",
+    "gsn_legend_box_ndc",
+    "gsn_panel_pattern_legend_ndc",
 ]
 from ._ncl_resources import print_projection_aliases, print_resource_groups, projection_aliases, resource_groups

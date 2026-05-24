@@ -3,6 +3,18 @@ from __future__ import annotations
 import numpy as np
 
 from ._resources import bool_resource
+from ._colors import ncl_color_to_mpl
+
+
+def _normalize_labelbar_color_resources(lbres):
+    """Normalize NCL-style labelbar color resources."""
+    lbres = dict(lbres or {})
+
+    for key, value in list(lbres.items()):
+        if key.endswith("Color") or "Color" in key:
+            lbres[key] = ncl_color_to_mpl(value)
+
+    return lbres
 
 
 def _merge_labelbar_resources(lbres, pmres=None):
@@ -324,6 +336,7 @@ def add_labelbar(fig, ax, mappable, lbres: dict | None = None, cax=None, pmres=N
     pmLabelBarParallelPosF
     """
     lbres = _merge_labelbar_resources(lbres, pmres)
+    lbres = _normalize_labelbar_color_resources(lbres)
 
     if not bool_resource(lbres, "lbLabelBarOn", True):
         return None
@@ -692,6 +705,7 @@ except NameError:
 def add_labelbar(fig, ax, mappable, lbres: dict | None = None, cax=None, pmres=None):
     """Add an NCL-style labelbar with stronger resource handling."""
     lbres = _merge_labelbar_resources(lbres, pmres)
+    lbres = _normalize_labelbar_color_resources(lbres)
 
     if not bool_resource(lbres, "lbLabelBarOn", True):
         return None
@@ -946,3 +960,258 @@ def _manual_cax_from_pm(fig, ax, lbres):
     return _climara_v026b_base_manual_cax_from_pm(fig, ax, lbres)
 
 # climara v0.2.6b labelbar map-spacing fix end
+
+
+# climara v0.3.0 NCL-style labelbar polish begin
+
+def _ncl_labelbar_font_height_to_points(value):
+    """Convert NCL-style lb*FontHeightF to Matplotlib point size.
+
+    In NCL, values such as 0.010 are common normalized font heights.
+    Matplotlib interprets fontsize as points, so 0.010 would be invisible.
+    """
+    value = float(value)
+
+    if 0.0 < value < 1.0:
+        return value * 1000.0
+
+    return value
+
+
+def _ncl_labelbar_extend_from_style(lbres):
+    style = str(lbres.get("lbBoxEndCapStyle", "")).lower()
+
+    if "triangleboth" in style or "both" in style:
+        return "both"
+
+    if "trianglelow" in style or "min" in style or "low" in style:
+        return "min"
+
+    if "trianglehigh" in style or "max" in style or "high" in style:
+        return "max"
+
+    return lbres.get("lbExtend", None)
+
+
+def _v030_apply_labelbar_ticks(cbar, mappable, lbres):
+    labels = _v025_parse_sequence(lbres.get("lbLabelStrings", None))
+
+    stride = int(lbres.get("lbLabelStride", 1))
+
+    if stride < 1:
+        stride = 1
+
+    auto_stride = bool_resource(lbres, "lbLabelAutoStride", False)
+    max_labels = int(lbres.get("lbLabelMaxCount", 99))
+
+    # For NCL-like explicit-level labelbars, edge labels are usually desired.
+    if (
+        "lbLabelAlignment" not in lbres
+        and _v025_get_boundaries_from_mappable(mappable) is not None
+    ):
+        lbres = dict(lbres)
+        lbres["lbLabelAlignment"] = "ExternalEdges"
+
+    if labels is not None:
+        labels = [str(item) for item in labels]
+        ticks = _v025_ticks_for_label_strings(cbar, mappable, lbres, labels)
+
+        idx = _v025_select_indices(
+            len(labels),
+            stride=stride,
+            auto_stride=auto_stride,
+            max_count=max_labels,
+        )
+
+        labels = [labels[i] for i in idx]
+        ticks = np.asarray(ticks, dtype=float)[idx]
+
+        cbar.set_ticks(ticks)
+        cbar.set_ticklabels(labels)
+    else:
+        ticks = _v025_get_ticks_from_alignment(cbar, mappable, lbres)
+
+        if ticks is None:
+            ticks = np.asarray(cbar.get_ticks(), dtype=float)
+
+        ticks = np.asarray(ticks, dtype=float)
+
+        if auto_stride and ticks.size > max_labels:
+            stride = int(np.ceil(ticks.size / max_labels))
+
+        if stride > 1 and ticks.size > 0:
+            ticks = ticks[::stride]
+
+        if ticks.size > 0:
+            cbar.set_ticks(ticks)
+
+        fmt = lbres.get("lbLabelFormat", None)
+
+        if fmt is not None and ticks.size > 0:
+            cbar.set_ticklabels([_v025_format_tick(v, fmt) for v in ticks])
+
+    label_size = lbres.get("lbLabelFontHeightF", None)
+    label_color = lbres.get("lbLabelFontColor", None)
+    tick_color = lbres.get("lbTickMarkColor", label_color)
+    tick_length = lbres.get("lbTickLengthF", 3.0)
+    tick_width = lbres.get("lbTickThicknessF", 0.6)
+
+    tick_kwargs = {
+        "length": float(tick_length),
+        "width": float(tick_width),
+        "pad": float(lbres.get("lbLabelOffsetF", 2.0)),
+    }
+
+    if label_size is not None:
+        tick_kwargs["labelsize"] = _ncl_labelbar_font_height_to_points(label_size)
+
+    if label_color is not None:
+        tick_kwargs["labelcolor"] = label_color
+
+    if tick_color is not None:
+        tick_kwargs["colors"] = tick_color
+
+    cbar.ax.tick_params(**tick_kwargs)
+
+    if not bool_resource(lbres, "lbTickMarksOn", True):
+        cbar.ax.tick_params(length=0)
+
+    angle = float(lbres.get("lbLabelAngleF", 0.0))
+    weight = lbres.get("lbLabelFontWeight", None)
+
+    orientation = _normalize_orientation(lbres)
+
+    if orientation == "horizontal":
+        texts = cbar.ax.get_xticklabels()
+    else:
+        texts = cbar.ax.get_yticklabels()
+
+    for text in texts:
+        text.set_rotation(angle)
+
+        if weight is not None:
+            text.set_fontweight(weight)
+
+        if label_color is not None:
+            text.set_color(label_color)
+
+    return cbar
+
+
+def _v030_apply_labelbar_title(cbar, lbres):
+    title = lbres.get("lbTitleString", None)
+
+    if title is None:
+        return cbar
+
+    orientation = _normalize_orientation(lbres)
+    position = str(lbres.get("lbTitlePosition", "bottom")).lower()
+    size = _ncl_labelbar_font_height_to_points(
+        lbres.get("lbTitleFontHeightF", 10)
+    )
+    color = lbres.get("lbTitleFontColor", "black")
+    weight = lbres.get("lbTitleFontWeight", "normal")
+    pad = float(lbres.get("lbTitleOffsetF", 2.0))
+
+    if orientation == "horizontal":
+        if position in ["top", "above"]:
+            cbar.ax.set_title(
+                str(title),
+                fontsize=size,
+                color=color,
+                fontweight=weight,
+                pad=pad,
+            )
+        else:
+            cbar.ax.set_xlabel(
+                str(title),
+                fontsize=size,
+                color=color,
+                fontweight=weight,
+                labelpad=pad,
+            )
+    else:
+        cbar.ax.set_ylabel(
+            str(title),
+            fontsize=size,
+            color=color,
+            fontweight=weight,
+            labelpad=pad,
+        )
+
+        if position in ["left"]:
+            cbar.ax.yaxis.set_label_position("left")
+            cbar.ax.yaxis.tick_left()
+        else:
+            cbar.ax.yaxis.set_label_position("right")
+            cbar.ax.yaxis.tick_right()
+
+    return cbar
+
+
+try:
+    _climara_v030_base_add_labelbar
+except NameError:
+    _climara_v030_base_add_labelbar = add_labelbar
+
+
+def add_labelbar(fig, ax, mappable, lbres: dict | None = None, cax=None, pmres=None):
+    """Add an NCL-style labelbar with NCL font-height semantics."""
+    lbres = _merge_labelbar_resources(lbres, pmres)
+    lbres = _normalize_labelbar_color_resources(lbres)
+
+    if not bool_resource(lbres, "lbLabelBarOn", True):
+        return None
+
+    display_mode = str(lbres.get("pmLabelBarDisplayMode", "Always")).lower()
+
+    if display_mode in ["never", "no", "false", "none", "off"]:
+        return None
+
+    orientation = _normalize_orientation(lbres)
+
+    if cax is None:
+        cax = _manual_cax_from_pm(fig, ax, lbres)
+
+    drawedges = bool_resource(lbres, "lbBoxLinesOn", True)
+
+    extend = _ncl_labelbar_extend_from_style(lbres)
+
+    colorbar_kwargs = {
+        "orientation": orientation,
+        "drawedges": drawedges,
+    }
+
+    if extend is not None:
+        colorbar_kwargs["extend"] = extend
+
+    if cax is not None:
+        cbar = fig.colorbar(
+            mappable,
+            cax=cax,
+            **colorbar_kwargs,
+        )
+    else:
+        cbar = fig.colorbar(
+            mappable,
+            ax=ax,
+            shrink=float(lbres.get("lbShrinkF", 0.82)),
+            pad=float(lbres.get("lbPadF", 0.06)),
+            aspect=float(lbres.get("lbAspectF", 28)),
+            **colorbar_kwargs,
+        )
+
+    _v025_apply_labelbar_axis(cbar, lbres)
+    _v030_apply_labelbar_ticks(cbar, mappable, lbres)
+    _v030_apply_labelbar_title(cbar, lbres)
+    _v025_apply_labelbar_box(cbar, lbres)
+
+    # Match NCL-like compact horizontal labelbar appearance.
+    if orientation == "horizontal":
+        cbar.ax.xaxis.set_ticks_position(
+            "top" if str(lbres.get("lbLabelPosition", "bottom")).lower() == "top" else "bottom"
+        )
+
+    return cbar
+
+# climara v0.3.0 NCL-style labelbar polish end
