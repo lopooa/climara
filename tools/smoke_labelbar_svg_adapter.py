@@ -219,6 +219,20 @@ def main():
     assert thick_perim_prim.polygons[0].stroke == "orange"
     close(thick_perim_prim.polygons[0].stroke_width, 3.0)
 
+    adapter_labels_off = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("x0", "x1", "x2", "x3"),
+        labels=("X0", "X1", "X2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbLabelsOn": False,
+        },
+    )
+    adapter_labels_off_prim = labelbar_to_svg_primitives(adapter_labels_off, 1000.0, 1000.0)
+    assert len(adapter_labels_off_prim.polygons) == 4
+    assert len(adapter_labels_off_prim.lines) == 7
+    assert len(adapter_labels_off_prim.texts) == 0
+
     print("✅ LabelBar SVG adapter smoke passed")
     print("✅ NDC LabelBar geometry converts to SVG primitive coordinates without touching renderer")
 

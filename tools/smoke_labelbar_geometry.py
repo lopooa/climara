@@ -184,6 +184,25 @@ def main():
     angle_geom = compute_labelbar_geometry(angle_obj)
     close(angle_geom.label_angle, 315.0)
 
+    labels_off = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("o0", "o1", "o2", "o3"),
+        labels=("O0", "O1", "O2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbLabelsOn": False,
+        },
+    )
+    labels_off_geom = compute_labelbar_geometry(labels_off)
+    assert labels_off_geom.label_draw_count == 0
+    assert labels_off_geom.visible_label_strings == ()
+    assert labels_off_geom.label_locs == ()
+    assert labels_off_geom.label_text_positions == ()
+    assert labels_off_geom.label_keep_end_items is False
+
+    labels_off_polys = compute_labelbar_box_polygons(labels_off_geom)
+    assert len(labels_off_polys) == 4
+
     print("✅ LabelBar NCL geometry smoke passed")
     print("✅ geometry layer follows SetLabelBarGeometry / SetBoxLocations / SetLabels / DrawFilledBoxes closed subset")
 

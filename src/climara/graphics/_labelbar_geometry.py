@@ -406,30 +406,39 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
             offset = 0.0
         increment = adj_box_size.y * label_stride
 
-    label_count = label_count_for_alignment(box_count, label_alignment)
-    label_indices = label_indices_for_stride(box_count, label_alignment, label_stride)
-    label_draw_count = len(label_indices)
-    visible_labels = _visible_labels(obj, label_count, label_indices)
+    labels_on = _bool(_pick(obj, "lbLabelsOn", True), True)
 
-    label_locs = tuple(
-        base_pos + offset + i * increment
-        for i in range(label_draw_count)
-    )
+    if labels_on:
+        label_count = label_count_for_alignment(box_count, label_alignment)
+        label_indices = label_indices_for_stride(box_count, label_alignment, label_stride)
+        label_draw_count = len(label_indices)
+        visible_labels = _visible_labels(obj, label_count, label_indices)
 
-    if orientation == ORIENTATION_HORIZONTAL:
-        multi_text_orientation = "YConst"
-        label_text_positions = tuple(
-            NdcTextPlacement(x=loc, y=label_const_pos, text=label)
-            for loc, label in zip(label_locs, visible_labels)
+        label_locs = tuple(
+            base_pos + offset + i * increment
+            for i in range(label_draw_count)
         )
+
+        if orientation == ORIENTATION_HORIZONTAL:
+            multi_text_orientation = "YConst"
+            label_text_positions = tuple(
+                NdcTextPlacement(x=loc, y=label_const_pos, text=label)
+                for loc, label in zip(label_locs, visible_labels)
+            )
+        else:
+            multi_text_orientation = "XConst"
+            label_text_positions = tuple(
+                NdcTextPlacement(x=label_const_pos, y=loc, text=label)
+                for loc, label in zip(label_locs, visible_labels)
+            )
     else:
-        multi_text_orientation = "XConst"
-        label_text_positions = tuple(
-            NdcTextPlacement(x=label_const_pos, y=loc, text=label)
-            for loc, label in zip(label_locs, visible_labels)
-        )
+        label_draw_count = 0
+        visible_labels = ()
+        label_locs = ()
+        label_text_positions = ()
+        multi_text_orientation = "YConst" if orientation == ORIENTATION_HORIZONTAL else "XConst"
 
-    label_keep_end_items = label_alignment == LABEL_ALIGNMENT_EXTERNAL_EDGES
+    label_keep_end_items = labels_on and label_alignment == LABEL_ALIGNMENT_EXTERNAL_EDGES
 
     label_angle = _num(_pick(obj, "lbLabelAngleF", 0.0), 0.0)
     if label_angle < 0.0:
