@@ -23,6 +23,7 @@ def main():
     run([sys.executable, no_mpl_check])
 
     run_if_exists("tools/check_no_external_render_deps.py")
+    run_if_exists("tools/check_no_worktree_artifacts.py")
     run_if_exists("tools/smoke_cyclic_no_cartopy.py")
     run_if_exists("tools/smoke_text_bbox_guard.py")
     run_if_exists("tools/smoke_text_bbox_not_used_by_render_path.py")
