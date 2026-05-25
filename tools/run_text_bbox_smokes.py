@@ -44,6 +44,8 @@ SMOKES = [
     "tools/smoke_labelbar_adjust_geometry_execution.py",
     "tools/smoke_labelbar_adjust_materialize.py",
     "tools/smoke_labelbar_adjust_apply_geometry.py",
+    "tools/smoke_labelbar_adjust_pipeline.py",
+    "tools/smoke_labelbar_adjust_pipeline_not_used.py",
     "tools/smoke_labelbar_adjust_apply_not_used.py",
     "tools/smoke_labelbar_adjust_materialize_not_used.py",
     "tools/smoke_labelbar_adjust_geometry_guard.py",
