@@ -203,6 +203,95 @@ def main():
     labels_off_polys = compute_labelbar_box_polygons(labels_off_geom)
     assert len(labels_off_polys) == 4
 
+    bottom_pos = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("b0", "b1", "b2", "b3"),
+        labels=("B0", "B1", "B2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbLabelPosition": "Bottom",
+        },
+    )
+    bottom_geom = compute_labelbar_geometry(bottom_pos)
+    assert bottom_geom.orientation == ORIENTATION_HORIZONTAL
+    assert bottom_geom.label_position == "Bottom"
+    assert bottom_geom.labels_area.t <= bottom_geom.bar.b
+    assert bottom_geom.labels_area.b <= bottom_geom.label_const_pos <= bottom_geom.labels_area.t
+
+    top_pos = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("t0", "t1", "t2", "t3"),
+        labels=("T0", "T1", "T2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbLabelPosition": "Top",
+        },
+    )
+    top_geom = compute_labelbar_geometry(top_pos)
+    assert top_geom.orientation == ORIENTATION_HORIZONTAL
+    assert top_geom.label_position == "Top"
+    assert top_geom.labels_area.b >= top_geom.bar.t
+    assert top_geom.labels_area.b <= top_geom.label_const_pos <= top_geom.labels_area.t
+
+    center_h = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("c0", "c1", "c2", "c3"),
+        labels=("C0", "C1", "C2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbLabelPosition": "Center",
+        },
+    )
+    center_h_geom = compute_labelbar_geometry(center_h)
+    assert center_h_geom.label_position == "Center"
+    close(center_h_geom.label_const_pos, center_h_geom.adj_bar.b + center_h_geom.adj_box_size.y / 2.0)
+
+    right_pos = HluLabelBar(
+        rect=(0.2, 0.9, 0.2, 0.6),
+        colors=("r0", "r1", "r2", "r3"),
+        labels=("R0", "R1", "R2", "R3"),
+        resources={
+            "lbBoxCount": 4,
+            "lbOrientation": "Vertical",
+            "lbLabelPosition": "Right",
+        },
+    )
+    right_geom = compute_labelbar_geometry(right_pos)
+    assert right_geom.orientation == ORIENTATION_VERTICAL
+    assert right_geom.label_position == "Right"
+    assert right_geom.labels_area.l >= right_geom.bar.r
+    assert right_geom.labels_area.l <= right_geom.label_const_pos <= right_geom.labels_area.r
+
+    left_pos = HluLabelBar(
+        rect=(0.2, 0.9, 0.2, 0.6),
+        colors=("l0", "l1", "l2", "l3"),
+        labels=("L0", "L1", "L2", "L3"),
+        resources={
+            "lbBoxCount": 4,
+            "lbOrientation": "Vertical",
+            "lbLabelPosition": "Left",
+        },
+    )
+    left_geom = compute_labelbar_geometry(left_pos)
+    assert left_geom.orientation == ORIENTATION_VERTICAL
+    assert left_geom.label_position == "Left"
+    assert left_geom.labels_area.r <= left_geom.bar.l
+    assert left_geom.labels_area.l <= left_geom.label_const_pos <= left_geom.labels_area.r
+
+    center_v = HluLabelBar(
+        rect=(0.2, 0.9, 0.2, 0.6),
+        colors=("v0", "v1", "v2", "v3"),
+        labels=("V0", "V1", "V2", "V3"),
+        resources={
+            "lbBoxCount": 4,
+            "lbOrientation": "Vertical",
+            "lbLabelPosition": "Center",
+        },
+    )
+    center_v_geom = compute_labelbar_geometry(center_v)
+    assert center_v_geom.label_position == "Center"
+    close(center_v_geom.label_const_pos, center_v_geom.adj_bar.l + center_v_geom.adj_box_size.x / 2.0)
+
     print("✅ LabelBar NCL geometry smoke passed")
     print("✅ geometry layer follows SetLabelBarGeometry / SetBoxLocations / SetLabels / DrawFilledBoxes closed subset")
 
