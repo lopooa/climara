@@ -1,385 +1,376 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-import numpy as np
-
-from ._labelbar import (
-    _merge_labelbar_resources,
-    _normalize_labelbar_color_resources,
-    _normalize_orientation,
+from ._labelbar_semantics import (
+    END_STYLE_EXCLUDE_OUTER_BOXES,
+    END_STYLE_INCLUDE_MIN_MAX_LABELS,
+    END_STYLE_INCLUDE_OUTER_BOXES,
+    GSN_CREATE_LABELBAR_DEFAULTS,
+    LABEL_ALIGNMENT_EXTERNAL_EDGES,
+    LABEL_ALIGNMENT_INTERIOR_EDGES,
+    NCL_LABELBAR_DEFAULTS,
+    label_alignment_for_end_style,
+    label_count_for_alignment,
+    label_indices_for_stride,
+    normalize_box_count,
+    normalize_end_style,
+    normalize_label_alignment,
+    normalize_label_stride,
+    normalize_orientation,
+    uniform_label_axis_positions,
 )
-from ._primitive import HluPolygon, HluPolyline
-from ._resources import bool_resource
-from ._text_item import HluTextItem
-from ._view import HluView
 
 
-@dataclass
-class HluLabelBar:
-    view: HluView
-    orientation: str = "horizontal"
-    boundaries: list = field(default_factory=list)
-    fill_colors: list = field(default_factory=list)
-    labels: list = field(default_factory=list)
-    title: str | None = None
-    end_cap_style: str = "none"
-    resources: dict = field(default_factory=dict)
-    primitives: list = field(default_factory=list)
+def _as_tuple(value: Any | None) -> tuple[Any, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, tuple):
+        return value
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Sequence):
+        return tuple(value)
+    return (value,)
 
 
-def _labelbar_boundaries_from_mappable(mappable):
-    norm = getattr(mappable, "norm", None)
-    boundaries = getattr(norm, "boundaries", None)
-
-    if boundaries is not None:
-        arr = np.asarray(boundaries, dtype=float)
-
-        if arr.size >= 2:
-            return arr.tolist()
-
-    levels = getattr(mappable, "levels", None)
-
-    if levels is not None:
-        arr = np.asarray(levels, dtype=float)
-
-        if arr.size >= 2:
-            return arr.tolist()
-
-    try:
-        vmin, vmax = mappable.get_clim()
-    except Exception:
-        vmin, vmax = -1.0, 1.0
-
-    return np.linspace(float(vmin), float(vmax), 11).tolist()
+def _as_label_tuple(value: Any | None) -> tuple[str, ...]:
+    return tuple(str(item) for item in _as_tuple(value))
 
 
-def _labelbar_fill_colors_from_mappable(mappable, boundaries):
-    cmap = getattr(mappable, "cmap", None)
-    norm = getattr(mappable, "norm", None)
-
-    if cmap is None:
-        return ["white"] * max(0, len(boundaries) - 1)
-
-    mids = 0.5 * (np.asarray(boundaries[:-1]) + np.asarray(boundaries[1:]))
-
-    colors = []
-
-    for value in mids:
-        try:
-            if norm is not None:
-                colors.append(cmap(norm(value)))
-            else:
-                colors.append(cmap(value))
-        except Exception:
-            colors.append(cmap(0.5))
-
-    return colors
+def _is_empty_sequence(value: Any | None) -> bool:
+    return len(_as_tuple(value)) == 0
 
 
-def _format_label(value, lbres):
-    fmt = lbres.get("lbLabelFormat", None)
-    value = float(value)
-
-    if abs(value) < 1e-12:
-        value = 0.0
-
-    if fmt is not None:
-        try:
-            return fmt % value
-        except Exception:
-            pass
-
-    if abs(value - round(value)) < 1e-10:
-        return str(int(round(value)))
-
-    return f"{value:g}"
+def _first_non_empty(*values: Any) -> Any | None:
+    for value in values:
+        if value is not None and not _is_empty_sequence(value):
+            return value
+    return None
 
 
-def _labelbar_labels_from_boundaries(boundaries, lbres):
-    label_strings = lbres.get("lbLabelStrings", None)
-
-    if label_strings is not None:
-        return [str(item) for item in label_strings]
-
-    return [_format_label(v, lbres) for v in boundaries]
+def _as_resource_dict(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    return dict(value)
 
 
-def _labelbar_end_cap_style(lbres):
-    style = str(lbres.get("lbBoxEndCapStyle", "None")).lower()
-
-    if "triangleboth" in style or "both" in style:
-        return "both"
-
-    if "trianglelow" in style or "min" in style or "low" in style:
-        return "min"
-
-    if "trianglehigh" in style or "max" in style or "high" in style:
-        return "max"
-
-    return "none"
+def _is_resource_mapping(value: Any) -> bool:
+    return isinstance(value, Mapping)
 
 
-def _make_polygon(x, y, fill_color, line_color, line_thickness, name):
-    return HluPolygon(
-        x=list(x),
-        y=list(y),
-        coord_system="ndc",
-        name=name,
-        resources={
-            "fill_color": fill_color,
-            "line_color": line_color,
-            "line_thickness": line_thickness,
-        },
+def _rect_from_resources(resources: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    return (
+        float(resources.get("vpXF", 0.1)),
+        float(resources.get("vpYF", 0.1)),
+        float(resources.get("vpWidthF", 0.8)),
+        float(resources.get("vpHeightF", 0.3)),
     )
 
 
-def _make_polyline(x, y, line_color, line_thickness, name):
-    return HluPolyline(
-        x=list(x),
-        y=list(y),
-        coord_system="ndc",
-        name=name,
-        resources={
-            "gsLineColor": line_color,
-            "gsLineThicknessF": line_thickness,
-        },
+def _normalize_rect(value: Any | None, resources: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    if value is None:
+        value = resources.get("rect")
+
+    if value is None:
+        return _rect_from_resources(resources)
+
+    items = _as_tuple(value)
+    if len(items) != 4:
+        raise ValueError(f"LabelBar rect must have four values, got {value!r}")
+
+    return tuple(float(item) for item in items)  # type: ignore[return-value]
+
+
+def _resource_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "off", "no"}
+    return bool(value)
+
+
+def _default_label_string(index: int) -> str:
+    return f"Label_{index}"
+
+
+def _label_string_at(labels: tuple[str, ...], index: int) -> str:
+    if 0 <= index < len(labels):
+        return labels[index]
+    return _default_label_string(index)
+
+
+def _visible_label_strings(labels: tuple[str, ...], indices: tuple[int, ...]) -> tuple[str, ...]:
+    return tuple(_label_string_at(labels, index) for index in indices)
+
+
+def _resolve_gsn_labelbar_resources(
+    nbox: int,
+    colors: tuple[Any, ...],
+    labels: tuple[str, ...],
+    user_resources: Mapping[str, Any],
+) -> tuple[dict[str, Any], tuple[Any, ...], tuple[str, ...]]:
+    resources: dict[str, Any] = {}
+    resources.update(NCL_LABELBAR_DEFAULTS)
+    resources.update(GSN_CREATE_LABELBAR_DEFAULTS)
+    resources.update(user_resources)
+
+    end_style_value = resources.get("EndStyle", resources.get("cnLabelBarEndStyle"))
+    end_style = normalize_end_style(end_style_value)
+
+    explicit_alignment = None
+    if "lbLabelAlignment" in user_resources:
+        explicit_alignment = user_resources["lbLabelAlignment"]
+
+    label_alignment = label_alignment_for_end_style(end_style, explicit_alignment)
+
+    label_values = _first_non_empty(
+        resources.get("lbLabelStrings"),
+        resources.get("labels"),
+        labels,
+        resources.get("levels"),
+        resources.get("lbLevels"),
     )
+    new_labels = _as_label_tuple(label_values)
 
-
-def _make_text_item(text, x, y, just, size, color, angle, name):
-    return HluTextItem(
-        txString=str(text),
-        txPosXF=float(x),
-        txPosYF=float(y),
-        txJust=str(just),
-        txFontHeightF=float(size),
-        txFontColor=color,
-        txAngleF=float(angle),
-        coord_system="ndc",
-        name=name,
+    color_values = _first_non_empty(
+        resources.get("lbFillColors"),
+        resources.get("colors"),
+        colors,
     )
+    base_colors = _as_tuple(color_values)
 
+    subset_stuff = _resource_bool(resources.get("SubsetStuff", False))
+    box_count = nbox
+    fill_colors = base_colors
 
-def _build_horizontal_labelbar_primitives(labelbar: HluLabelBar):
-    """Build NCL-like horizontal LabelBar primitives.
-
-    Important NCL-style rule:
-    pmLabelBarWidthF is treated as the full labelbar width, including
-    triangular end caps. The rectangular boxes live inside that width.
-    """
-    view = labelbar.view
-    lbres = dict(labelbar.resources)
-
-    x0 = view.left
-    x1 = view.right
-    y0 = view.bottom
-    y1 = view.top
-
-    width = x1 - x0
-    height = y1 - y0
-
-    boundaries = labelbar.boundaries
-    colors = labelbar.fill_colors
-    labels = labelbar.labels
-
-    nbox = len(colors)
-
-    if nbox <= 0:
-        return []
-
-    draw_low = labelbar.end_cap_style in ["both", "min"]
-    draw_high = labelbar.end_cap_style in ["both", "max"]
-
-    # NCL triangular end caps are part of the labelbar width.
-    # Treat each cap as half of one box by default.
-    cap_ratio = float(lbres.get("lbBoxEndCapRatioF", 0.5))
-
-    ncap = 0.0
-
-    if draw_low:
-        ncap += cap_ratio
-
-    if draw_high:
-        ncap += cap_ratio
-
-    box_width = width / (float(nbox) + ncap)
-    cap_width = cap_ratio * box_width
-
-    body_x0 = x0 + (cap_width if draw_low else 0.0)
-    body_x1 = x1 - (cap_width if draw_high else 0.0)
-
-    dx = (body_x1 - body_x0) / float(nbox)
-
-    # Vertical geometry.  The box sits in the upper half of the labelbar
-    # view; labels sit below it; the unit title sits below the labels.
-    box_y0 = y0 + float(lbres.get("lbBoxBottomRatioF", 0.62)) * height
-    box_y1 = y0 + float(lbres.get("lbBoxTopRatioF", 0.84)) * height
-    box_ym = 0.5 * (box_y0 + box_y1)
-
-    label_y = y0 + float(lbres.get("lbLabelYRatioF", 0.50)) * height
-    title_y = y0 + float(lbres.get("lbTitleYRatioF", 0.10)) * height
-
-    line_color = lbres.get("lbBoxLineColor", "black")
-    line_thickness = float(lbres.get("lbBoxLineThicknessF", 0.45))
-    sep_line_thickness = float(
-        lbres.get("lbBoxSeparatorLineThicknessF", line_thickness)
-    )
-
-    primitives = []
-
-    if draw_low:
-        primitives.append(
-            _make_polygon(
-                [x0, body_x0, body_x0],
-                [box_ym, box_y1, box_y0],
-                colors[0],
-                line_color,
-                line_thickness,
-                "labelbar_left_endcap",
-            )
-        )
-
-    for i, color in enumerate(colors):
-        xa = body_x0 + i * dx
-        xb = xa + dx
-
-        primitives.append(
-            _make_polygon(
-                [xa, xb, xb, xa],
-                [box_y0, box_y0, box_y1, box_y1],
-                color,
-                line_color,
-                line_thickness,
-                f"labelbar_box_{i}",
-            )
-        )
-
-    if draw_high:
-        primitives.append(
-            _make_polygon(
-                [body_x1, body_x1, x1],
-                [box_y0, box_y1, box_ym],
-                colors[-1],
-                line_color,
-                line_thickness,
-                "labelbar_right_endcap",
-            )
-        )
-
-    if bool_resource(lbres, "lbBoxLinesOn", True):
-        for i in range(1, nbox):
-            xx = body_x0 + i * dx
-            primitives.append(
-                _make_polyline(
-                    [xx, xx],
-                    [box_y0, box_y1],
-                    line_color,
-                    sep_line_thickness,
-                    f"labelbar_sep_{i}",
-                )
-            )
-
-    if bool_resource(lbres, "lbTickMarksOn", True):
-        tick_color = lbres.get("lbTickMarkColor", line_color)
-        tick_thickness = float(lbres.get("lbTickThicknessF", 0.6))
-        tick_length = float(lbres.get("lbTickLengthF", 0.08 * height))
-
-        # If users pass an NCL-like small ratio, keep it as page/NDC distance.
-        # If they pass a larger visual value, interpret it as percent.
-        if tick_length > 1.0:
-            tick_length = tick_length / 100.0
-
-        tick_y0 = box_y0
-        tick_y1 = box_y0 - tick_length
-
-        for i in range(len(boundaries)):
-            xx = body_x0 + i * dx
-            primitives.append(
-                _make_polyline(
-                    [xx, xx],
-                    [tick_y0, tick_y1],
-                    tick_color,
-                    tick_thickness,
-                    f"labelbar_tick_{i}",
-                )
-            )
-
-    if bool_resource(lbres, "lbLabelsOn", True):
-        label_size = float(lbres.get("lbLabelFontHeightF", 0.010))
-        label_color = lbres.get("lbLabelFontColor", "black")
-        label_angle = float(lbres.get("lbLabelAngleF", 0.0))
-
-        for i, label in enumerate(labels):
-            xx = body_x0 + i * dx
-            primitives.append(
-                _make_text_item(
-                    label,
-                    xx,
-                    label_y,
-                    "top_center",
-                    label_size,
-                    label_color,
-                    label_angle,
-                    f"labelbar_label_{i}",
-                )
-            )
-
-    if bool_resource(lbres, "lbTitleOn", False) and labelbar.title is not None:
-        title_size = float(lbres.get("lbTitleFontHeightF", 0.010))
-        title_color = lbres.get("lbTitleFontColor", "black")
-        title_position = str(lbres.get("lbTitlePosition", "Bottom")).lower()
-
-        if title_position in ["top", "above"]:
-            title_y_final = y0 + 0.94 * height
-            title_just = "bottom_center"
+    if end_style == END_STYLE_EXCLUDE_OUTER_BOXES:
+        if subset_stuff and len(base_colors) >= 2:
+            fill_colors = base_colors[1:-1]
+            box_count = max(1, nbox - 2)
         else:
-            title_y_final = title_y
-            title_just = "top_center"
+            box_count = nbox
+            fill_colors = base_colors
+    else:
+        box_count = nbox
+        fill_colors = base_colors
 
-        primitives.append(
-            _make_text_item(
-                labelbar.title,
-                0.5 * (body_x0 + body_x1),
-                title_y_final,
-                title_just,
-                title_size,
-                title_color,
-                0.0,
-                "labelbar_title",
-            )
+    if not fill_colors:
+        fill_colors = _as_tuple(resources.get("lbFillColors"))
+   
+        fill_colors = base_colors
+
+    if not fill_colors:
+        fill_colors = _as_tuple(resources.get("lbFillColors"))
+    if not fill_colors:
+        box_count = normalize_box_count(resources.get("lbBoxCount", box_count))
+    else:
+        box_count = normalize_box_count(box_count)
+
+    resources["lbBoxCount"] = box_count
+    resources["lbFillColors"] = fill_colors
+    resources["lbLabelStrings"] = new_labels
+    resources["colors"] = fill_colors
+    resources["labels"] = new_labels
+    resources["lbLabelAlignment"] = label_alignment
+    resources["lbOrientation"] = normalize_orientation(resources.get("lbOrientation"))
+    resources["lbLabelStride"] = normalize_label_stride(resources.get("lbLabelStride", 1))
+
+    return resources, fill_colors, new_labels
+
+
+class HluLabelBar:
+    object_type = "labelbar"
+    plot_type = "labelbar"
+
+    def __init__(
+        self,
+        rect: Any | None = None,
+        colors: Sequence[Any] | None = None,
+        labels: Sequence[Any] | None = None,
+        resources: Mapping[str, Any] | None = None,
+        *,
+        name: str = "labelbar",
+        levels: Sequence[Any] | None = None,
+        fill_patterns: Sequence[Any] | None = None,
+        fill_scales: Sequence[Any] | None = None,
+        **extra_resources: Any,
+    ) -> None:
+        user_resources = _as_resource_dict(resources)
+        user_resources.update(extra_resources)
+
+        merged_resources: dict[str, Any] = {}
+        merged_resources.update(NCL_LABELBAR_DEFAULTS)
+        merged_resources.update(user_resources)
+
+        self.name = name
+        self.resources = merged_resources
+        self.rect = _normalize_rect(rect, merged_resources)
+
+        self.colors = _as_tuple(colors if colors is not None else merged_resources.get("lbFillColors"))
+        self.fill_colors = self.colors
+        self.labels = _as_label_tuple(labels if labels is not None else merged_resources.get("lbLabelStrings"))
+        self.label_strings = self.labels
+        self.levels = _as_tuple(levels)
+
+        self.fill_patterns = _as_tuple(
+            fill_patterns if fill_patterns is not None else merged_resources.get("lbFillPatterns")
+        )
+        self.fill_scales = _as_tuple(
+            fill_scales if fill_scales is not None else merged_resources.get("lbFillScales")
         )
 
-    return primitives
+        self.orientation = normalize_orientation(merged_resources.get("lbOrientation"))
+        self.label_alignment = normalize_label_alignment(merged_resources.get("lbLabelAlignment"))
+        self.box_count = normalize_box_count(merged_resources.get("lbBoxCount", len(self.colors) or 16))
+        self.label_stride = normalize_label_stride(merged_resources.get("lbLabelStride", 1))
+        self.label_count = label_count_for_alignment(self.box_count, self.label_alignment)
+        self.label_indices = label_indices_for_stride(
+            self.box_count,
+            self.label_alignment,
+            self.label_stride,
+        )
+        self.label_draw_count = len(self.label_indices)
+        self.visible_label_strings = _visible_label_strings(self.label_strings, self.label_indices)
+        self.label_axis_positions = uniform_label_axis_positions(
+            self.box_count,
+            self.label_alignment,
+            self.label_stride,
+        )
+
+        self.box_end_cap_style = str(merged_resources.get("lbBoxEndCapStyle", "RectangleEnds"))
+        self.auto_manage = _resource_bool(merged_resources.get("lbAutoManage", True))
+        self.perim_on = _resource_bool(merged_resources.get("lbPerimOn", False))
+        self.labels_on = _resource_bool(merged_resources.get("lbLabelsOn", True))
+
+        self.label_font_height = float(merged_resources.get("lbLabelFontHeightF", 0.02))
+        self.label_offset = float(merged_resources.get("lbLabelOffsetF", 0.1))
+        self.box_minor_extent = float(merged_resources.get("lbBoxMinorExtentF", 0.33))
+
+        self.resources["rect"] = self.rect
+        self.resources["vpXF"] = self.rect[0]
+        self.resources["vpYF"] = self.rect[1]
+        self.resources["vpWidthF"] = self.rect[2]
+        self.resources["vpHeightF"] = self.rect[3]
+        self.resources["lbFillColors"] = self.fill_colors
+        self.resources["lbLabelStrings"] = self.label_strings
+        self.resources["lbOrientation"] = self.orientation
+        self.resources["lbLabelAlignment"] = self.label_alignment
+        self.resources["lbBoxCount"] = self.box_count
+        self.resources["lbLabelStride"] = self.label_stride
+
+    @property
+    def x(self) -> float:
+        return self.rect[0]
+
+    @property
+    def y(self) -> float:
+        return self.rect[1]
+
+    @property
+    def width(self) -> float:
+        return self.rect[2]
+
+    @property
+    def height(self) -> float:
+        return self.rect[3]
+
+    @property
+    def vpXF(self) -> float:
+        return self.rect[0]
+
+    @property
+    def vpYF(self) -> float:
+        return self.rect[1]
+
+    @property
+    def vpWidthF(self) -> float:
+        return self.rect[2]
+
+    @property
+    def vpHeightF(self) -> float:
+        return self.rect[3]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.resources.get(key, default)
+
+    def to_resource_dict(self) -> dict[str, Any]:
+        return dict(self.resources)
+
+    def compute_geometry(self):
+        from ._labelbar_geometry import compute_labelbar_geometry
+
+        return compute_labelbar_geometry(self)
 
 
+def build_hlu_labelbar(
+    *args: Any,
+    resources: Mapping[str, Any] | None = None,
+    rect: Any | None = None,
+    colors: Sequence[Any] | None = None,
+    labels: Sequence[Any] | None = None,
+    levels: Sequence[Any] | None = None,
+    fill_patterns: Sequence[Any] | None = None,
+    fill_scales: Sequence[Any] | None = None,
+    name: str = "labelbar",
+    **extra_resources: Any,
+) -> HluLabelBar:
+    if args:
+        if len(args) == 1 and _is_resource_mapping(args[0]) and resources is None and rect is None:
+            resources = args[0]
+        else:
+            if len(args) >= 1 and rect is None:
+                rect = args[0]
+            if len(args) >= 2 and colors is None:
+                colors = args[1]
+            if len(args) >= 3 and labels is None:
+                labels = args[2]
+            if len(args) >= 4 and resources is None:
+                resources = args[3]
+            if len(args) > 4:
+                raise TypeError("build_hlu_labelbar accepts at most four positional arguments")
 
-def build_hlu_labelbar(view: HluView, mappable, lbres: dict | None = None, pmres=None):
-    lbres = _merge_labelbar_resources(lbres, pmres)
-    lbres = _normalize_labelbar_color_resources(lbres)
+    user_resources = _as_resource_dict(resources)
+    user_resources.update(extra_resources)
 
-    orientation = _normalize_orientation(lbres)
-
-    boundaries = _labelbar_boundaries_from_mappable(mappable)
-    fill_colors = _labelbar_fill_colors_from_mappable(mappable, boundaries)
-    labels = _labelbar_labels_from_boundaries(boundaries, lbres)
-    title = lbres.get("lbTitleString", None)
-    end_cap_style = _labelbar_end_cap_style(lbres)
-
-    labelbar = HluLabelBar(
-        view=view,
-        orientation=orientation,
-        boundaries=list(boundaries),
-        fill_colors=list(fill_colors),
-        labels=list(labels),
-        title=title,
-        end_cap_style=end_cap_style,
-        resources=dict(lbres),
+    base_color_values = _first_non_empty(
+        colors,
+        user_resources.get("lbFillColors"),
+        user_resources.get("colors"),
+    )
+    base_label_values = _first_non_empty(
+        labels,
+        user_resources.get("lbLabelStrings"),
+        user_resources.get("labels"),
+        user_resources.get("levels"),
+        user_resources.get("lbLevels"),
     )
 
-    if orientation == "horizontal":
-        labelbar.primitives = _build_horizontal_labelbar_primitives(labelbar)
-    else:
-        labelbar.primitives = []
+    base_colors = _as_tuple(base_color_values)
+    base_labels = _as_label_tuple(base_label_values)
 
-    return labelbar
+    nbox = len(base_colors)
+    if nbox <= 0:
+        nbox = normalize_box_count(user_resources.get("lbBoxCount", NCL_LABELBAR_DEFAULTS["lbBoxCount"]))
+
+    resolved_resources, fill_colors, label_strings = _resolve_gsn_labelbar_resources(
+        nbox,
+        base_colors,
+        base_labels,
+        user_resources,
+    )
+
+    resolved_rect = _normalize_rect(rect, resolved_resources)
+
+    return HluLabelBar(
+        rect=resolved_rect,
+        colors=fill_colors,
+        labels=label_strings,
+        resources=resolved_resources,
+        name=name,
+        levels=levels,
+        fill_patterns=fill_patterns,
+        fill_scales=fill_scales,
+    )
+
+
+__all__ = ["HluLabelBar", "build_hlu_labelbar"]

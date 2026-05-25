@@ -1,1100 +1,909 @@
+"""
+GSN/HLU-style panel helpers.
+
+The first-order layout follows gsn_panel_return in NCL gsn_code.ncl:
+dims, row spec, panel bounds, main-string top reservation, whitespace,
+scale, and viewport assignment.
+"""
+
 from __future__ import annotations
 
-import math
-import matplotlib.pyplot as plt
+from dataclasses import dataclass, field
+from math import ceil, sqrt
+from typing import Any, Mapping, Sequence
 
-from ._contour import ncl_contour_map
-from ._labelbar import add_labelbar
 from ._labelbar_object import build_hlu_labelbar
-from ._render_mpl import render_ndc_primitives_mpl
-from ._maps import create_projection
-from ._panel_layout import compute_gsn_panel_layout
-from ._resources import bool_resource, split_resources
-from ._view import HluView
+from ._objects import HluPanel, as_resources
 from ._text_item import HluTextItem
-from ._workflow import apply_gsn_workflow
+
+def _labelbar_bottom_rect_to_view_rect(rect):
+    x, bottom, width, height = rect
+    return (x, bottom + height, width, height)
 
 
-def _copy_res_without_labelbar(res):
-    new_res = dict(res or {})
-    new_res["lbLabelBarOn"] = False
-    return new_res
+@dataclass
+class HluPanelItem:
+    """A plot item placed inside a panel."""
+
+    plot: Any
+    index: int
+    rect: tuple[float, float, float, float]
+    resources: dict[str, Any] = field(default_factory=dict)
 
 
-def _as_int_list(values):
-    if values is None:
-        return None
+@dataclass
+class HluPanelLayout:
+    """Panel layout in normalized device coordinates."""
 
-    if isinstance(values, str):
-        values = values.replace(",", " ").split()
+    nplots: int
+    nrows: int
+    ncols: int
+    rects: list[tuple[float, float, float, float]]
+    resources: dict[str, Any] = field(default_factory=dict)
+    row_spec: list[int] = field(default_factory=list)
+    scale: float = 1.0
+    bounds: tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
+    whitespace: tuple[float, float] = (0.0, 0.0)
+    labelbar_rect: tuple[float, float, float, float] | None = None
 
+
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "t", "yes", "y", "1", "on"}
+    return bool(value)
+
+
+def _as_float(resources: Mapping[str, Any], key: str, default: float) -> float:
     try:
-        return [int(v) for v in values]
-    except TypeError:
-        return [int(values)]
+        return float(resources.get(key, default))
+    except (TypeError, ValueError):
+        return default
 
 
-def _panel_row_counts(n, ncols, panel_res):
-    ncols = max(1, int(ncols))
-
-    use_row_spec = bool_resource(panel_res, "gsnPanelRowSpec", False)
-
-    raw = panel_res.get(
-        "gsnPanelRows",
-        panel_res.get(
-            "gsnPanelRowSpecValues",
-            panel_res.get("gsnPanelRowCounts", None),
-        ),
-    )
-
-    if use_row_spec and raw is not None:
-        counts = _as_int_list(raw)
-        counts = [max(1, int(v)) for v in counts]
-
-        total = sum(counts)
-
-        if total < n:
-            base = max(counts) if counts else ncols
-            remaining = n - total
-
-            while remaining > 0:
-                value = min(base, remaining)
-                counts.append(value)
-                remaining -= value
-
-        return counts, True
-
-    counts = []
-    remaining = n
-
-    while remaining > 0:
-        value = min(ncols, remaining)
-        counts.append(value)
-        remaining -= value
-
-    return counts, False
-
-
-def _panel_layout_info(n, ncols, panel_res, plot_res=None, common_labelbar=True):
-    """Return NCL-style panel layout information.
-
-    The layout calculation lives in _panel_layout.py and is backend independent.
-    This wrapper preserves the existing _panel.py return shape while moving
-    the layout policy away from Matplotlib.
-    """
-    return compute_gsn_panel_layout(
-        nplots=n,
-        ncols=ncols,
-        panel_res=panel_res,
-        plot_res=plot_res,
-        common_labelbar=common_labelbar,
-    )
-
-
-def _layout_rects(n, ncols, panel_res):
-    return _panel_layout_info(n, ncols, panel_res)["rects"]
-
-def _bounds_from_axes(axes):
-    xs0 = []
-    ys0 = []
-    xs1 = []
-    ys1 = []
-
-    for ax in axes:
-        pos = ax.get_position()
-        xs0.append(pos.x0)
-        ys0.append(pos.y0)
-        xs1.append(pos.x1)
-        ys1.append(pos.y1)
-
-    return min(xs0), min(ys0), max(xs1), max(ys1)
-
-
-def _normalize_panel_labelbar_side(panel_res, lbres, pmres):
-    side = str(
-        panel_res.get(
-            "gsnPanelLabelBarSide",
-            pmres.get("pmLabelBarSide", ""),
-        )
-    ).lower()
-
-    if side in ["top", "bottom", "left", "right"]:
-        return side
-
-    orientation = str(
-        panel_res.get(
-            "gsnPanelLabelBarOrientation",
-            lbres.get("lbOrientation", "horizontal"),
-        )
-    ).lower()
-
-    if orientation in ["vertical", "v"]:
-        return "right"
-
-    return "bottom"
-
-
-def _normalize_panel_labelbar_orientation(side, panel_res, lbres):
-    orientation = str(
-        panel_res.get(
-            "gsnPanelLabelBarOrientation",
-            lbres.get("lbOrientation", ""),
-        )
-    ).lower()
-
-    if orientation in ["vertical", "v"]:
-        return "vertical"
-
-    if orientation in ["horizontal", "h"]:
-        return "horizontal"
-
-    if side in ["left", "right"]:
-        return "vertical"
-
-    return "horizontal"
-
-
-def _panel_labelbar_rect(fig, axes, panel_res, lbres, pmres):
-    explicit_keys = [
-        "gsnPanelLabelBarLeft",
-        "gsnPanelLabelBarBottom",
-        "gsnPanelLabelBarWidth",
-        "gsnPanelLabelBarHeight",
-    ]
-
-    if all(key in panel_res for key in explicit_keys):
-        return [
-            float(panel_res["gsnPanelLabelBarLeft"]),
-            float(panel_res["gsnPanelLabelBarBottom"]),
-            float(panel_res["gsnPanelLabelBarWidth"]),
-            float(panel_res["gsnPanelLabelBarHeight"]),
-        ]
-
-    x0, y0, x1, y1 = _bounds_from_axes(axes)
-    width_all = x1 - x0
-    height_all = y1 - y0
-
-    side = _normalize_panel_labelbar_side(panel_res, lbres, pmres)
-    orientation = _normalize_panel_labelbar_orientation(side, panel_res, lbres)
-
-    default_width = width_all * 0.66 if orientation == "horizontal" else 0.025
-    default_height = 0.025 if orientation == "horizontal" else height_all * 0.78
-
-    width = float(
-        panel_res.get(
-            "gsnPanelLabelBarWidthF",
-            panel_res.get("gsnPanelLabelBarWidth", pmres.get("pmLabelBarWidthF", default_width)),
-        )
-    )
-    height = float(
-        panel_res.get(
-            "gsnPanelLabelBarHeightF",
-            panel_res.get("gsnPanelLabelBarHeight", pmres.get("pmLabelBarHeightF", default_height)),
-        )
-    )
-    parallel = float(
-        panel_res.get(
-            "gsnPanelLabelBarParallelPosF",
-            pmres.get("pmLabelBarParallelPosF", 0.0),
-        )
-    )
-    orthogonal = float(
-        panel_res.get(
-            "gsnPanelLabelBarOrthogonalPosF",
-            pmres.get("pmLabelBarOrthogonalPosF", 0.06),
-        )
-    )
-
-    if side in ["top", "bottom"]:
-        left = x0 + (width_all - width) / 2 + parallel
-
-        if side == "top":
-            bottom = y1 + orthogonal
-        else:
-            bottom = y0 - orthogonal - height
-    else:
-        bottom = y0 + (height_all - height) / 2 + parallel
-
-        if side == "left":
-            left = x0 - orthogonal - width
-        else:
-            left = x1 + orthogonal
-
-    return [left, bottom, width, height]
-
-
-def _as_float_list(values):
-    if values is None:
-        return None
-
-    if isinstance(values, str):
-        values = values.replace(",", " ").split()
-
+def _as_int(resources: Mapping[str, Any], key: str, default: int) -> int:
     try:
-        return [float(v) for v in values]
-    except TypeError:
-        return [float(values)]
+        return int(resources.get(key, default))
+    except (TypeError, ValueError):
+        return default
 
 
-def _values_from_spacing(vmin, vmax, spacing):
-    spacing = float(spacing)
-
-    if spacing <= 0:
-        return None
-
-    start = math.ceil(vmin / spacing) * spacing
-    values = []
-    value = start
-
-    while value <= vmax + spacing * 0.25:
-        if value >= vmin - spacing * 0.25:
-            values.append(float(value))
-        value += spacing
-
-    return values
-
-
-def _panel_lon_tick_values(res):
-    values = _as_float_list(
-        res.get(
-            "tmXBValues",
-            res.get(
-                "tmXTValues",
-                res.get("mpGridLonValues", None),
-            ),
-        )
-    )
-
-    if values is not None:
-        return values
-
-    spacing = res.get("mpGridLonSpacingF", res.get("mpGridSpacingF", None))
-
-    if spacing is None:
-        return None
-
-    vmin = float(res.get("mpMinLonF", -180.0))
-    vmax = float(res.get("mpMaxLonF", 180.0))
-
-    return _values_from_spacing(vmin, vmax, spacing)
-
-
-def _drop_nearest_boundary_value(values, side):
-    if values is None or len(values) == 0:
-        return values
-
-    values = [float(v) for v in values]
-
-    if side == "left":
-        target = min(values)
-    elif side == "right":
-        target = max(values)
-    else:
-        return values
-
-    return [v for v in values if abs(v - target) > 1e-8]
-
-
-def _trim_inner_panel_lon_tick_values(res, col, ncols, panel_res):
-    if not bool_resource(panel_res, "gsnPanelTrimInnerEdgeLonLabels", True):
-        return res
-
-    values = _panel_lon_tick_values(res)
-
-    if values is None:
-        return res
-
-    if col > 0:
-        values = _drop_nearest_boundary_value(values, "left")
-
-    if col < ncols - 1:
-        values = _drop_nearest_boundary_value(values, "right")
-
-    # 这里只裁剪 Cartopy gridliner 的经度标签。
-    # 不要写 tmXBValues / tmXTValues，否则 Matplotlib 轴刻度会和
-    # Cartopy 经纬度标签同时出现，导致底部标签叠加、顶部 tick 冒出来。
-    res["mpGridLonValues"] = values
-
-    return res
-
-
-def _set_panel_tick_policy(res, i, ncols, nrows, panel_res, layout_info=None):
-    if layout_info is not None:
-        row = layout_info["rows"][i]
-        col = layout_info["cols"][i]
-        row_ncols = layout_info["row_counts"][row]
-        nrows = layout_info["nrows"]
-    else:
-        row = i // ncols
-        col = i % ncols
-        row_ncols = ncols
-
-    # Panel maps use compact label defaults.
-    # By default, hide map/grid/polar coordinate labels in panel plots.
-    # Users can explicitly enable them with:
-    #   gsnPanelMapLabelsOn = True
-    if not bool_resource(panel_res, "gsnPanelMapLabelsOn", False):
-        res["tmYLLabelsOn"] = False
-        res["tmYRLabelsOn"] = False
-        res["tmXBLabelsOn"] = False
-        res["tmXTLabelsOn"] = False
-
-        res["mpGridLabelsOn"] = False
-        res["mpGridLeftLabelsOn"] = False
-        res["mpGridRightLabelsOn"] = False
-        res["mpGridBottomLabelsOn"] = False
-        res["mpGridTopLabelsOn"] = False
-
-        res["gsnPolarLabelOn"] = False
-        res["gsnPolarLongitudeLabelsOn"] = False
-        res["gsnPolarLatitudeLabelOn"] = False
-
-        return res
-
-    if not bool_resource(panel_res, "gsnPanelAutoTickLabels", True):
-        return res
-
-    res.setdefault("mpGridLabelsOn", True)
-    res.setdefault("gsnPolarLabelOn", True)
-    res.setdefault("gsnPolarLongitudeLabelsOn", True)
-    res.setdefault("gsnPolarLatitudeLabelOn", True)
-
-    left_on = bool_resource(panel_res, "gsnPanelLeftLabelsOn", True) and col == 0
-    right_on = bool_resource(panel_res, "gsnPanelRightLabelsOn", False) and col == row_ncols - 1
-    bottom_on = bool_resource(panel_res, "gsnPanelBottomLabelsOn", True) and row == nrows - 1
-    top_on = bool_resource(panel_res, "gsnPanelTopLabelsOn", False) and row == 0
-
-    res["tmYLLabelsOn"] = left_on
-    res["tmYRLabelsOn"] = right_on
-    res["tmXBLabelsOn"] = bottom_on
-    res["tmXTLabelsOn"] = top_on
-
-    res["mpGridLeftLabelsOn"] = left_on
-    res["mpGridRightLabelsOn"] = right_on
-    res["mpGridBottomLabelsOn"] = bottom_on
-    res["mpGridTopLabelsOn"] = top_on
-
-    res = _trim_inner_panel_lon_tick_values(res, col, row_ncols, panel_res)
-
-    return res
-
-def _iter_gridliner_label_artists(gl):
-    if gl is None:
+def _as_list_value(value: Any) -> list[Any]:
+    if value is None:
         return []
-
-    artists = []
-
-    names = [
-        "label_artists",
-        "xlabel_artists",
-        "ylabel_artists",
-        "top_label_artists",
-        "bottom_label_artists",
-        "left_label_artists",
-        "right_label_artists",
-    ]
-
-    for name in names:
-        obj = getattr(gl, name, None)
-
-        if obj is None:
-            continue
-
-        if isinstance(obj, (list, tuple)):
-            artists.extend(obj)
-        else:
-            artists.append(obj)
-
-    unique = []
-    seen = set()
-
-    for artist in artists:
-        if artist is None:
-            continue
-
-        key = id(artist)
-
-        if key in seen:
-            continue
-
-        seen.add(key)
-        unique.append(artist)
-
-    return unique
-
-
-def _iter_axis_text_artists(ax):
-    artists = []
-
-    for child in ax.get_children():
-        if not hasattr(child, "get_text"):
-            continue
-
-        try:
-            text = child.get_text()
-        except Exception:
-            continue
-
-        if text:
-            artists.append(child)
-
-    return artists
-
-
-def _hide_panel_inner_edge_ticklabels(fig, axes, ncols, nrows, panel_res, results):
-    if not bool_resource(panel_res, "gsnPanelHideInnerEdgeLabels", True):
-        return
-
+    if isinstance(value, str):
+        return [value]
     try:
-        fig.canvas.draw()
-        renderer = fig.canvas.get_renderer()
-    except Exception:
-        return
-
-    xpad = float(panel_res.get("gsnPanelInnerEdgeLabelPadF", 0.035))
-    ypad = float(panel_res.get("gsnPanelInnerEdgeLabelYPadF", 0.065))
-
-    for i, ax in enumerate(axes):
-        row = i // ncols
-        col = i % ncols
-        pos = ax.get_position()
-
-        result = results[i] if i < len(results) else {}
-        gl = None
-
-        if isinstance(result, dict):
-            gl = result.get("gridliner", None)
-
-        artists = _iter_gridliner_label_artists(gl)
-
-        if not artists:
-            artists = _iter_axis_text_artists(ax)
-
-        for artist in artists:
-            if not hasattr(artist, "get_window_extent"):
-                continue
-
-            try:
-                bbox = artist.get_window_extent(renderer=renderer)
-                fbbox = bbox.transformed(fig.transFigure.inverted())
-            except Exception:
-                continue
-
-            cx = 0.5 * (fbbox.x0 + fbbox.x1)
-            cy = 0.5 * (fbbox.y0 + fbbox.y1)
-
-            near_left = abs(cx - pos.x0) <= xpad
-            near_right = abs(cx - pos.x1) <= xpad
-            near_bottom = cy <= pos.y0 + ypad
-            near_top = cy >= pos.y1 - ypad
-
-            is_x_edge_label = near_bottom or near_top
-
-            if col < ncols - 1 and near_right and is_x_edge_label:
-                artist.set_visible(False)
-
-            if col > 0 and near_left and is_x_edge_label:
-                artist.set_visible(False)
-
-            is_y_edge_label = near_left or near_right
-
-            if row < nrows - 1 and abs(cy - pos.y0) <= ypad and is_y_edge_label:
-                artist.set_visible(False)
-
-            if row > 0 and abs(cy - pos.y1) <= ypad and is_y_edge_label:
-                artist.set_visible(False)
-
-def _panel_text_just_to_mpl(just):
-    just = str(just).replace("-", "_").replace(" ", "_").lower()
-
-    if "left" in just:
-        ha = "left"
-    elif "right" in just:
-        ha = "right"
-    else:
-        ha = "center"
-
-    if "top" in just:
-        va = "top"
-    elif "bottom" in just:
-        va = "bottom"
-    else:
-        va = "center"
-
-    return ha, va
+        return list(value)
+    except TypeError:
+        return [value]
 
 
-def _panel_font_height_to_mpl_points(value):
-    value = float(value)
+def _normalize_resources(
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> tuple[Any, dict[str, Any]]:
+    if isinstance(dims, Mapping) and resources is None:
+        resources = dims
+        dims = None
 
-    if 0.0 < value < 1.0:
-        return value * 1000.0
+    res = as_resources(resources, **kwargs)
+    return dims, res
 
+
+def _panel_shape(
+    nplots: int,
+    dims: Any,
+    resources: Mapping[str, Any],
+) -> tuple[int, int, list[int]]:
+    if nplots <= 0:
+        return 0, 0, []
+
+    row_spec_on = _as_bool(resources.get("gsnPanelRowSpec"), False)
+
+    if dims is None:
+        if "gsnPanelRows" in resources or "gsnPanelColumns" in resources:
+            nrows = max(1, _as_int(resources, "gsnPanelRows", 1))
+            ncols = max(1, _as_int(resources, "gsnPanelColumns", nplots))
+            return nrows, ncols, [ncols for _ in range(nrows)]
+
+        ncols = max(1, ceil(sqrt(nplots)))
+        nrows = max(1, ceil(nplots / ncols))
+        return nrows, ncols, [ncols for _ in range(nrows)]
+
+    dims_list = [int(item) for item in _as_list_value(dims)]
+
+    if row_spec_on:
+        row_spec = [max(0, item) for item in dims_list]
+        nrows = len(row_spec)
+        ncols = max(row_spec) if row_spec else 0
+        return nrows, ncols, row_spec
+
+    if len(dims_list) != 2:
+        raise ValueError(
+            "NCL gsn_panel dims must be (nrows, ncols), unless gsnPanelRowSpec is True."
+        )
+
+    nrows = max(1, dims_list[0])
+    ncols = max(1, dims_list[1])
+    return nrows, ncols, [ncols for _ in range(nrows)]
+
+
+def _main_string_value(resources: Mapping[str, Any]) -> Any:
+    return resources.get("gsnPanelMainString", resources.get("txString", ""))
+
+
+def _panel_main_font_height(resources: Mapping[str, Any]) -> float:
+    return float(
+        resources.get(
+            "gsnPanelMainFontHeightF",
+            resources.get("txFontHeightF", 0.02),
+        )
+    )
+
+
+def _panel_bounds(resources: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    x_left = _as_float(resources, "gsnPanelLeft", 0.0)
+    x_right = _as_float(resources, "gsnPanelRight", 1.0)
+    y_bottom = _as_float(resources, "gsnPanelBottom", 0.0)
+    y_top = _as_float(resources, "gsnPanelTop", 1.0)
+
+    main_string = _main_string_value(resources)
+    top_given = "gsnPanelTop" in resources
+
+    if main_string not in (None, "") and not top_given:
+        main_font_height = _panel_main_font_height(resources)
+
+        if "gsnPanelMainPosYF" in resources:
+            y_top = min(1.0, float(resources["gsnPanelMainPosYF"]) - 0.03)
+        elif "txPosYF" in resources:
+            y_top = min(1.0, float(resources["txPosYF"]) - 0.03)
+        else:
+            y_top = min(1.0, 0.96 - main_font_height)
+
+    x_left = max(0.0, min(1.0, x_left))
+    x_right = max(0.0, min(1.0, x_right))
+    y_bottom = max(0.0, min(1.0, y_bottom))
+    y_top = max(0.0, min(1.0, y_top))
+
+    if x_right <= x_left:
+        raise ValueError("gsnPanelRight must be greater than gsnPanelLeft.")
+    if y_top <= y_bottom:
+        raise ValueError("gsnPanelTop must be greater than gsnPanelBottom.")
+
+    return x_left, x_right, y_bottom, y_top
+
+
+def _panel_white_percent(resources: Mapping[str, Any], key: str) -> float:
+    value = _as_float(resources, key, 1.0)
+    if value < 0.0 or value >= 100.0:
+        return 1.0
     return value
 
 
-def _draw_panel_text_item_mpl(fig, item, bbox=None):
-    """Temporary renderer bridge for panel-level HLU TextItem objects."""
-    ha, va = _panel_text_just_to_mpl(item.txJust)
+def _plot_old_viewport(plot: Any) -> tuple[float, float, float, float]:
+    resources = getattr(plot, "resources", {})
+    if not isinstance(resources, Mapping):
+        resources = {}
 
-    return fig.text(
-        item.txPosXF,
-        item.txPosYF,
-        item.txString,
-        ha=ha,
-        va=va,
-        fontsize=_panel_font_height_to_mpl_points(item.txFontHeightF),
-        color=item.txFontColor,
-        rotation=item.txAngleF,
-        fontweight=item.resources.get("txFontWeight", item.resources.get("fontweight", "normal")),
-        bbox=bbox,
-    )
+    x = float(resources.get("vpXF", 0.10))
+    y_top = float(resources.get("vpYF", 0.90))
+    width = float(resources.get("vpWidthF", 0.80))
+    height = float(resources.get("vpHeightF", 0.60))
+
+    width = max(width, 1.0e-6)
+    height = max(height, 1.0e-6)
+
+    return x, y_top, width, height
 
 
-def _make_panel_text_item(
-    text,
-    x,
-    y,
-    just,
-    font_height,
-    color="black",
-    angle=0.0,
-    name=None,
-    resources=None,
-):
-    return HluTextItem(
-        txString=str(text),
-        txPosXF=float(x),
-        txPosYF=float(y),
-        txJust=str(just),
-        txFontHeightF=float(font_height),
-        txFontColor=color,
-        txAngleF=float(angle),
-        coord_system="ndc",
-        name=name,
-        resources=dict(resources or {}),
-    )
+def _scale_plot_index(
+    nplots: int,
+    resources: Mapping[str, Any],
+) -> int:
+    index = _as_int(resources, "gsnPanelScalePlotIndex", -1)
+    if 0 <= index < nplots:
+        return index
+    return 0
 
 
-def _add_panel_figure_strings(fig, axes, panel_res, return_items=False):
-    strings = panel_res.get("gsnPanelFigureStrings", None)
+def _labelbar_orientation(resources: Mapping[str, Any]) -> str:
+    return str(resources.get("lbOrientation", "horizontal")).lower()
 
-    if strings is None:
-        if return_items:
-            return [], []
-        return []
 
-    artists = []
-    items = []
+def _panel_labelbar_on(resources: Mapping[str, Any]) -> bool:
+    return _as_bool(resources.get("gsnPanelLabelBar"), False)
 
-    size = float(panel_res.get("gsnPanelFigureStringsFontHeightF", 11))
-    color = panel_res.get("gsnPanelFigureStringsFontColor", "black")
-    just = str(panel_res.get("gsnPanelFigureStringsJust", "top_left")).lower()
-    xoff = float(panel_res.get("gsnPanelFigureStringsXOffset", 0.01))
-    yoff = float(panel_res.get("gsnPanelFigureStringsYOffset", 0.01))
 
-    for ax, text_value in zip(axes, strings):
-        pos = ax.get_position()
+def _first_plot_resource(plots: Sequence[Any], *names: str) -> Any:
+    for plot in plots:
+        resources = getattr(plot, "resources", None)
+        if isinstance(resources, Mapping):
+            for name in names:
+                if name in resources:
+                    return resources[name]
+        for name in names:
+            if hasattr(plot, name):
+                value = getattr(plot, name)
+                if value is not None:
+                    return value
+    return None
 
-        if just in ["top_left", "topleft", "left"]:
-            x = pos.x0 + xoff
-            y = pos.y1 - yoff
-            txjust = "top_left"
-        elif just in ["top_right", "topright", "right"]:
-            x = pos.x1 - xoff
-            y = pos.y1 - yoff
-            txjust = "top_right"
-        elif just in ["bottom_left", "bottomleft"]:
-            x = pos.x0 + xoff
-            y = pos.y0 + yoff
-            txjust = "bottom_left"
-        elif just in ["bottom_right", "bottomright"]:
-            x = pos.x1 - xoff
-            y = pos.y0 + yoff
-            txjust = "bottom_right"
+
+def _compute_labelbar_extent(
+    nplots: int,
+    nrows: int,
+    ncols: int,
+    plot_width: float,
+    plot_height: float,
+    total_width: float,
+    total_height: float,
+    xwsp: float,
+    ywsp: float,
+    resources: Mapping[str, Any],
+) -> tuple[bool, float, float]:
+    if not _panel_labelbar_on(resources):
+        return True, 0.0, 0.0
+
+    vertical = _labelbar_orientation(resources).startswith("v")
+
+    if vertical:
+        labelbar_width = 0.20 * plot_width + 2.0 * xwsp
+        if nplots > 1 and nrows > 1:
+            labelbar_height = (nrows - 1) * total_height
         else:
-            x = pos.x0 + xoff
-            y = pos.y1 - yoff
-            txjust = "top_left"
+            labelbar_height = plot_height
+        return False, labelbar_width, labelbar_height
 
-        resources = {
-            "fontweight": panel_res.get("gsnPanelFigureStringsFontWeight", "normal"),
-            "source": "gsnPanelFigureStrings",
-        }
+    labelbar_height = 0.20 * plot_height + 2.0 * ywsp
+    if nplots > 1 and ncols > 1:
+        labelbar_width = (ncols - 1) * total_width
+    else:
+        labelbar_width = plot_width
 
-        item = _make_panel_text_item(
-            text_value,
-            x,
-            y,
-            txjust,
-            size,
-            color=color,
-            name="gsnPanelFigureString",
-            resources=resources,
-        )
-
-        bbox = None
-
-        if bool_resource(panel_res, "gsnPanelFigureStringsBackgroundOn", False):
-            bbox = {
-                "facecolor": panel_res.get("gsnPanelFigureStringsBackgroundColor", "white"),
-                "edgecolor": panel_res.get("gsnPanelFigureStringsPerimColor", "none"),
-                "alpha": float(panel_res.get("gsnPanelFigureStringsBackgroundAlphaF", 0.0)),
-                "pad": float(panel_res.get("gsnPanelFigureStringsBackgroundPadF", 0.2)),
-            }
-
-        artist = _draw_panel_text_item_mpl(fig, item, bbox=bbox)
-
-        artists.append(artist)
-        items.append(item)
-
-    if return_items:
-        return artists, items
-
-    return artists
+    return True, labelbar_width, labelbar_height
 
 
+def compute_panel_rects(
+    nplots: int,
+    resources: Mapping[str, Any] | None = None,
+    dims: Any = None,
+) -> HluPanelLayout:
+    """Compute NCL-style panel plot viewports."""
 
-def _add_panel_row_col_titles(fig, axes, ncols, panel_res, return_items=False):
-    artists = []
-    items = []
+    res = dict(resources or {})
+    nrows, ncols, row_spec = _panel_shape(nplots, dims, res)
 
-    row_titles = panel_res.get("gsnPanelRowTitles", None)
-    col_titles = panel_res.get("gsnPanelColTitles", None)
+    if nplots <= 0:
+        return HluPanelLayout(0, 0, 0, [], res, row_spec=row_spec)
 
-    if col_titles is not None:
-        size = float(panel_res.get("gsnPanelColTitleFontHeightF", 12))
+    x_left, x_right, y_bottom, y_top = _panel_bounds(res)
 
-        for col, title in enumerate(col_titles):
-            if col >= ncols or col >= len(axes):
-                continue
+    xwsp_percent = _panel_white_percent(res, "gsnPanelXWhiteSpacePercent")
+    ywsp_percent = _panel_white_percent(res, "gsnPanelYWhiteSpacePercent")
 
-            pos = axes[col].get_position()
+    base_width = float(res.get("climaraBasePlotWidthF", 0.80))
+    base_height = float(res.get("climaraBasePlotHeightF", 0.60))
 
-            item = _make_panel_text_item(
-                title,
-                pos.x0 + pos.width / 2,
-                pos.y1 + float(panel_res.get("gsnPanelColTitleOffsetF", 0.035)),
-                "bottom_center",
-                size,
-                color=panel_res.get("gsnPanelColTitleFontColor", "black"),
-                name="gsnPanelColTitle",
-                resources={
-                    "fontweight": panel_res.get("gsnPanelColTitleFontWeight", "normal"),
-                    "source": "gsnPanelColTitles",
-                },
-            )
+    plot_width = max(base_width, 1.0e-6)
+    plot_height = max(base_height, 1.0e-6)
 
-            artist = _draw_panel_text_item_mpl(fig, item)
+    xwsp = xwsp_percent / 100.0 * plot_width
+    ywsp = ywsp_percent / 100.0 * plot_height
 
-            artists.append(artist)
-            items.append(item)
+    total_width = 2.0 * xwsp + plot_width
+    total_height = 2.0 * ywsp + plot_height
 
-    if row_titles is not None:
-        size = float(panel_res.get("gsnPanelRowTitleFontHeightF", 12))
-        nrows = math.ceil(len(axes) / ncols)
+    labelbar_horizontal, labelbar_width, labelbar_height = _compute_labelbar_extent(
+        nplots,
+        nrows,
+        ncols,
+        plot_width,
+        plot_height,
+        total_width,
+        total_height,
+        xwsp,
+        ywsp,
+        res,
+    )
 
-        for row, title in enumerate(row_titles):
-            if row >= nrows:
-                continue
+    xrange = x_right - x_left
+    yrange = y_top - y_bottom
 
-            idx = row * ncols
+    if labelbar_horizontal:
+        row_scale = yrange / max(nrows * total_height + labelbar_height, 1.0e-12)
+        col_scale = xrange / max(ncols * total_width, 1.0e-12)
+        scale = min(col_scale, row_scale)
+        yrange_for_plots = yrange - scale * labelbar_height
+        xrange_for_plots = xrange
+    else:
+        row_scale = yrange / max(nrows * total_height, 1.0e-12)
+        col_scale = xrange / max(ncols * total_width + labelbar_width, 1.0e-12)
+        scale = min(col_scale, row_scale)
+        xrange_for_plots = xrange - scale * labelbar_width
+        yrange_for_plots = yrange
 
-            if idx >= len(axes):
-                continue
+    new_plot_width = scale * plot_width
+    new_plot_height = scale * plot_height
 
-            pos = axes[idx].get_position()
+    xwsp = xwsp_percent / 100.0 * new_plot_width
+    ywsp = ywsp_percent / 100.0 * new_plot_height
 
-            item = _make_panel_text_item(
-                title,
-                pos.x0 - float(panel_res.get("gsnPanelRowTitleOffsetF", 0.035)),
-                pos.y0 + pos.height / 2,
-                "center_right",
-                size,
-                color=panel_res.get("gsnPanelRowTitleFontColor", "black"),
-                angle=float(panel_res.get("gsnPanelRowTitleAngleF", 90)),
-                name="gsnPanelRowTitle",
-                resources={
-                    "fontweight": panel_res.get("gsnPanelRowTitleFontWeight", "normal"),
-                    "source": "gsnPanelRowTitles",
-                },
-            )
+    new_total_width = 2.0 * xwsp + new_plot_width
+    new_total_height = 2.0 * ywsp + new_plot_height
 
-            artist = _draw_panel_text_item_mpl(fig, item)
+    panel_center = _as_bool(res.get("gsnPanelCenter"), True)
 
-            artists.append(artist)
-            items.append(item)
+    y_space = yrange_for_plots - new_total_height * nrows
+    row_tops = [
+        y_top - ywsp - (y_space / 2.0 + new_total_height * row)
+        for row in range(nrows)
+    ]
 
-    if return_items:
-        return artists, items
+    rects: list[tuple[float, float, float, float]] = []
 
-    return artists
+    nplot = 0
+    for row in range(nrows):
+        if nplot >= nplots:
+            break
+
+        new_ncols = min(nplots - nplot, row_spec[row] if row < len(row_spec) else ncols)
+
+        if panel_center:
+            x_space = xrange_for_plots - new_total_width * new_ncols
+        else:
+            x_space = xrange_for_plots - new_total_width * ncols
+
+        x_positions = [
+            x_left + xwsp + (x_space / 2.0 + new_total_width * col)
+            for col in range(new_ncols)
+        ]
+
+        for col in range(new_ncols):
+            if nplot >= nplots:
+                break
+
+            vpx = x_positions[col]
+            vpy = row_tops[row]
+
+            x_override = res.get("gsnPanelXF")
+            if isinstance(x_override, Sequence) and not isinstance(x_override, str):
+                if nplot < len(x_override):
+                    value = float(x_override[nplot])
+                    if 0.0 <= value <= 1.0:
+                        vpx = value
+
+            y_override = res.get("gsnPanelYF")
+            if isinstance(y_override, Sequence) and not isinstance(y_override, str):
+                if nplot < len(y_override):
+                    value = float(y_override[nplot])
+                    if 0.0 <= value <= 1.0:
+                        vpy = value
+
+            rects.append((vpx, vpy - new_plot_height, new_plot_width, new_plot_height))
+            nplot += 1
+
+    labelbar_rect = None
+    if _panel_labelbar_on(res):
+        scaled_labelbar_width = scale * labelbar_width
+        scaled_labelbar_height = scale * labelbar_height
+
+        if labelbar_horizontal:
+            width = float(res.get("pmLabelBarWidthF", scaled_labelbar_width))
+            height = float(res.get("pmLabelBarHeightF", scaled_labelbar_height))
+            top = max(ywsp + height, y_bottom - ywsp)
+            left = x_left + ((x_right - x_left) - width) / 2.0
+            left += float(res.get("pmLabelBarParallelPosF", 0.0))
+            top += float(res.get("pmLabelBarOrthogonalPosF", 0.0))
+            labelbar_rect = (left, top - height, width, height)
+        else:
+            width = float(res.get("pmLabelBarWidthF", scaled_labelbar_width))
+            height = float(res.get("pmLabelBarHeightF", scaled_labelbar_height))
+            left = min(1.0 - (xwsp + width), x_left + xrange_for_plots + xwsp)
+            top = y_top - ((y_top - y_bottom) - height) / 2.0
+            left += float(res.get("pmLabelBarOrthogonalPosF", 0.0))
+            top += float(res.get("pmLabelBarParallelPosF", 0.0))
+            labelbar_rect = (left, top - height, width, height)
+
+    layout_resources = dict(res)
+    layout_resources["ncl_dims"] = dims
+    layout_resources["ncl_row_spec"] = list(row_spec)
+    layout_resources["ncl_scale"] = scale
+    layout_resources["ncl_xwsp"] = xwsp
+    layout_resources["ncl_ywsp"] = ywsp
+
+    return HluPanelLayout(
+        nplots=nplots,
+        nrows=nrows,
+        ncols=ncols,
+        rects=rects,
+        resources=layout_resources,
+        row_spec=list(row_spec),
+        scale=scale,
+        bounds=(x_left, x_right, y_bottom, y_top),
+        whitespace=(xwsp, ywsp),
+        labelbar_rect=_labelbar_bottom_rect_to_view_rect(labelbar_rect),
+    )
 
 
+def compute_gsn_panel_layout(
+    nplots: int,
+    resources: Mapping[str, Any] | None = None,
+    dims: Any = None,
+) -> HluPanelLayout:
+    """Compatibility wrapper for NCL-style panel layout."""
+
+    return compute_panel_rects(nplots, resources, dims)
 
 
-def _as_panel_sequence(value, n, name):
-    if value is None:
+def _attach_panel_item(plot: Any, item: HluPanelItem) -> Any:
+    if hasattr(plot, "resources") and isinstance(plot.resources, dict):
+        plot.resources["vpXF"] = item.rect[0]
+        plot.resources["vpYF"] = item.rect[1] + item.rect[3]
+        plot.resources["vpWidthF"] = item.rect[2]
+        plot.resources["vpHeightF"] = item.rect[3]
+        plot.resources["gsnPanelIndex"] = item.index
+    return plot
+
+
+def _panel_main_tx_resource(
+    resources: Mapping[str, Any],
+    suffix: str,
+    default: Any,
+) -> Any:
+    explicit_name = f"gsnPanelMain{suffix}"
+    tx_name = f"tx{suffix}"
+    return resources.get(explicit_name, resources.get(tx_name, default))
+
+
+def _build_panel_main_string(resources: Mapping[str, Any]):
+    value = _main_string_value(resources)
+    if value in (None, ""):
         return None
 
-    if isinstance(value, (str, bytes)):
-        raise TypeError(f"{name} must be a number or a sequence of numbers")
+    x_left, x_right, y_bottom, y_top = _panel_bounds(resources)
 
-    try:
-        values = list(value)
-    except TypeError:
-        values = [value] * n
+    font_height = _panel_main_tx_resource(resources, "FontHeightF", 0.02)
+    x = resources.get("gsnPanelMainPosXF", resources.get("txPosXF", 0.5))
+    y = resources.get("gsnPanelMainPosYF", resources.get("txPosYF", y_top + 0.03))
 
-    if len(values) != n:
-        raise ValueError(f"{name} must have length {n}, got {len(values)}")
-
-    return [float(v) for v in values]
-
-
-def _apply_manual_panel_positions(rects, panel_res):
-    """Apply NCL-style gsnPanelXF / gsnPanelYF manual viewport positions.
-
-    In NCL, vpXF and vpYF describe the upper-left corner of a plot viewport.
-    Matplotlib add_axes uses [left, bottom, width, height], so y is converted
-    with bottom = vpYF - height.
-    """
-    n = len(rects)
-    x_values = _as_panel_sequence(panel_res.get("gsnPanelXF"), n, "gsnPanelXF")
-    y_values = _as_panel_sequence(panel_res.get("gsnPanelYF"), n, "gsnPanelYF")
-
-    if x_values is None and y_values is None:
-        return rects
-
-    new_rects = []
-
-    for i, rect in enumerate(rects):
-        left, bottom, width, height = rect
-
-        if x_values is not None:
-            left = x_values[i]
-
-        if y_values is not None:
-            bottom = y_values[i] - height
-
-        new_rects.append([left, bottom, width, height])
-
-    return new_rects
+    return HluTextItem(
+        text=str(value),
+        x=float(x),
+        y=float(y),
+        resources={
+            "txJust": _panel_main_tx_resource(resources, "Just", resources.get("txJust", "CenterCenter")),
+            "txFontHeightF": font_height,
+            "txFontColor": _panel_main_tx_resource(resources, "FontColor", resources.get("txFontColor", "black")),
+            "txAngleF": _panel_main_tx_resource(resources, "AngleF", resources.get("txAngleF", 0.0)),
+            "coordinate_system": "ndc",
+        },
+    )
 
 
-def _print_panel_debug(rects, layout_info, panel_res):
-    """Print NCL-style panel viewport diagnostics."""
-    if not bool(panel_res.get("gsnPanelDebug", False)):
-        return
+def _figure_string_value(values: list[Any], index: int) -> Any:
+    if not values:
+        return None
+    if index < len(values):
+        return values[index]
+    return None
 
-    print("")
-    print("climara.graphics gsn_panel debug")
-    print("--------------------------------")
-    print(f"nplots : {len(rects)}")
-    print(f"nrows  : {layout_info.get('nrows')}")
-    print(f"ncols  : {layout_info.get('ncols')}")
 
-    for key in [
-        "gsnPanelTop",
-        "gsnPanelBottom",
-        "gsnPanelLeft",
-        "gsnPanelRight",
-        "gsnPanelXWhiteSpacePercent",
-        "gsnPanelYWhiteSpacePercent",
-        "gsnPanelXGap",
-        "gsnPanelYGap",
-    ]:
-        if key in panel_res:
-            print(f"{key}: {panel_res[key]}")
+def _normalize_panel_figure_just(value: Any) -> str:
+    key = str(value or "bottomright").replace("_", "").replace("-", "").lower()
+    mapping = {
+        "bottomright": "bottomright",
+        "topright": "topright",
+        "topleft": "topleft",
+        "bottomleft": "bottomleft",
+    }
+    return mapping.get(key, "bottomright")
 
-    print("")
-    print("plot viewport positions")
-    print("index  left/vpXF   top/vpYF    width       height      bottom")
-    print("-----  ---------   --------    -----       ------      ------")
 
-    for i, rect in enumerate(rects):
-        left, bottom, width, height = rect
-        top = bottom + height
+def _panel_figure_tx_resource(
+    resources: Mapping[str, Any],
+    suffix: str,
+    default: Any,
+) -> Any:
+    return resources.get(
+        f"gsnPanelFigureStrings{suffix}",
+        resources.get(f"tx{suffix}", default),
+    )
 
-        print(
-            f"{i:>5}  "
-            f"{left:>9.4f}   "
-            f"{top:>8.4f}    "
-            f"{width:>7.4f}     "
-            f"{height:>7.4f}     "
-            f"{bottom:>7.4f}"
+
+def _build_panel_figure_string(
+    resources: Mapping[str, Any],
+    index: int,
+) -> HluTextItem | None:
+    values = _as_list_value(resources.get("gsnPanelFigureStrings"))
+    value = _figure_string_value(values, index)
+
+    if value in (None, ""):
+        return None
+
+    just = _normalize_panel_figure_just(
+        resources.get("gsnPanelFigureStringsJust", resources.get("amJust", "bottomright"))
+    )
+
+    text_resources: dict[str, Any] = {
+        "coordinate_system": "annotation",
+        "climaraTextRegion": "data",
+        "climaraPanelFigureString": True,
+        "amZone": resources.get("amZone", 0),
+        "amJust": just,
+        "amResizeNotify": resources.get("amResizeNotify", True),
+        "txFontHeightF": _panel_figure_tx_resource(resources, "FontHeightF", 0.014),
+        "txFontColor": _panel_figure_tx_resource(resources, "FontColor", "black"),
+        "txPerimOn": _panel_figure_tx_resource(resources, "PerimOn", True),
+        "txBackgroundFillColor": _panel_figure_tx_resource(resources, "BackgroundFillColor", 0),
+    }
+
+    if "amParallelPosF" in resources:
+        text_resources["amParallelPosF"] = resources["amParallelPosF"]
+    if "amOrthogonalPosF" in resources:
+        text_resources["amOrthogonalPosF"] = resources["amOrthogonalPosF"]
+
+    return HluTextItem(
+        text=str(value),
+        x=0.5,
+        y=0.5,
+        resources=text_resources,
+    )
+
+
+def _plot_resources(plot: Any) -> dict[str, Any]:
+    value = getattr(plot, "resources", None)
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
+
+
+def _plot_attr_or_resource(plot: Any, resources: Mapping[str, Any], *names: str) -> Any:
+    for name in names:
+        if name in resources:
+            return resources[name]
+    for name in names:
+        if hasattr(plot, name):
+            value = getattr(plot, name)
+            if value is not None:
+                return value
+    return None
+
+
+def _is_contour_plot(plot: Any, resources: Mapping[str, Any]) -> bool:
+    plot_type = str(resources.get("plot_type", "")).lower()
+    if plot_type == "contour":
+        return True
+    return "contour" in plot.__class__.__name__.lower()
+
+
+def _get_panel_labelbar_info_from_plot(plot: Any) -> dict[str, Any]:
+    resources = _plot_resources(plot)
+
+    info: dict[str, Any] = {
+        "panel_labelbar": False,
+        "label_strings": None,
+        "fill_colors": None,
+        "fill_patterns": None,
+        "fill_scales": None,
+        "mono_fill_color": False,
+        "mono_fill_pattern": False,
+        "mono_fill_scale": False,
+        "end_style": "IncludeOuterBoxes",
+        "cap_style": "RectangleEnds",
+        "label_alignment": "InteriorEdges",
+        "subset_stuff": False,
+        "levels": None,
+    }
+
+    if not _is_contour_plot(plot, resources):
+        return info
+
+    fill_on = _as_bool(resources.get("cnFillOn"), False)
+    if not fill_on:
+        return info
+
+    info["panel_labelbar"] = True
+    info["fill_colors"] = _plot_attr_or_resource(
+        plot,
+        resources,
+        "cnFillColors",
+        "cnFillPalette",
+        "colors",
+    )
+    info["fill_patterns"] = resources.get("cnFillPatterns")
+    info["fill_scales"] = resources.get("cnFillScales")
+    info["mono_fill_pattern"] = resources.get("cnMonoFillPattern", False)
+    info["mono_fill_scale"] = resources.get("cnMonoFillScale", False)
+    info["mono_fill_color"] = resources.get("cnMonoFillColor", False)
+    info["levels"] = _plot_attr_or_resource(plot, resources, "cnLevels", "levels")
+    info["end_style"] = resources.get("cnLabelBarEndStyle", "IncludeOuterBoxes")
+    info["cap_style"] = resources.get("lbBoxEndCapStyle", "RectangleEnds")
+    info["label_alignment"] = resources.get("lbLabelAlignment", "InteriorEdges")
+    info["label_strings"] = resources.get("lbLabelStrings")
+
+    if info["fill_scales"] is None:
+        info["fill_scales"] = -1
+    if info["fill_patterns"] is None:
+        info["fill_patterns"] = -1
+
+    info["subset_stuff"] = True
+    return info
+
+
+def _get_panel_labelbar_info(plots: Sequence[Any]) -> dict[str, Any]:
+    for plot in plots:
+        info = _get_panel_labelbar_info_from_plot(plot)
+        if info.get("panel_labelbar"):
+            return info
+
+    return {
+        "panel_labelbar": False,
+        "label_strings": None,
+        "fill_colors": None,
+        "levels": None,
+        "label_alignment": "InteriorEdges",
+        "cap_style": "RectangleEnds",
+        "end_style": "IncludeOuterBoxes",
+        "subset_stuff": False,
+    }
+
+
+def _build_shared_labelbar(
+    plots: Sequence[Any],
+    resources: Mapping[str, Any],
+    layout: HluPanelLayout,
+):
+    if not _panel_labelbar_on(resources):
+        return None
+
+    info = _get_panel_labelbar_info(plots)
+
+    colors = resources.get("lbFillColors")
+    if colors is None:
+        colors = info.get("fill_colors")
+    if colors is None:
+        colors = resources.get("cnFillColors", resources.get("cnFillPalette"))
+    if colors is None:
+        colors = _first_plot_resource(plots, "cnFillColors", "colors", "cnFillPalette")
+
+    levels = resources.get("lbLevels")
+    if levels is None:
+        levels = info.get("levels")
+    if levels is None:
+        levels = resources.get("cnLevels")
+    if levels is None:
+        levels = _first_plot_resource(plots, "cnLevels", "levels")
+
+    labels = resources.get("lbLabelStrings", resources.get("lbLabels"))
+    if labels is None:
+        labels = info.get("label_strings")
+
+    if colors is None or layout.labelbar_rect is None:
+        return None
+
+    labelbar_res = {
+        "rect": layout.labelbar_rect,
+        "lbOrientation": resources.get("lbOrientation", "horizontal"),
+        "lbLabelFontHeightF": resources.get("lbLabelFontHeightF", 0.012),
+        "lbLabelFontColor": resources.get("lbLabelFontColor", "black"),
+        "lbTickLengthF": resources.get("lbTickLengthF", 0.008),
+        "lbLabelGapF": resources.get("lbLabelGapF", 0.010),
+        "colors": colors,
+        "lbLabelAlignment": resources.get("lbLabelAlignment", info.get("label_alignment", "InteriorEdges")),
+        "lbBoxEndCapStyle": resources.get("lbBoxEndCapStyle", info.get("cap_style", "RectangleEnds")),
+        "EndStyle": resources.get("EndStyle", info.get("end_style", "IncludeOuterBoxes")),
+        "SubsetStuff": resources.get("SubsetStuff", info.get("subset_stuff", False)),
+    }
+
+    if levels is not None:
+        labelbar_res["levels"] = levels
+    if labels is not None:
+        labelbar_res["labels"] = labels
+
+    if info.get("fill_patterns") is not None:
+        labelbar_res["lbFillPatterns"] = info["fill_patterns"]
+    if info.get("fill_scales") is not None:
+        labelbar_res["lbFillScales"] = info["fill_scales"]
+    if info.get("mono_fill_color") is not None:
+        labelbar_res["lbMonoFillColor"] = info["mono_fill_color"]
+    if info.get("mono_fill_pattern") is not None:
+        labelbar_res["lbMonoFillPattern"] = info["mono_fill_pattern"]
+    if info.get("mono_fill_scale") is not None:
+        labelbar_res["lbMonoFillScale"] = info["mono_fill_scale"]
+
+    return build_hlu_labelbar(labelbar_res)
+
+def _panel_add_plot(panel: HluPanel, plot: Any) -> None:
+    if hasattr(panel, "add_plot"):
+        panel.add_plot(plot)
+    elif hasattr(panel, "plots"):
+        panel.plots.append(plot)
+
+
+def _panel_add_child(panel: HluPanel, child: Any) -> None:
+    if hasattr(panel, "add_child"):
+        panel.add_child(child)
+    elif hasattr(panel, "children"):
+        panel.children.append(child)
+
+
+def build_panel(
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Build a backend-neutral HLU panel object using NCL panel semantics."""
+
+    dims, res = _normalize_resources(dims, resources, **kwargs)
+    plot_list = list(plots)
+
+    scale_index = _scale_plot_index(len(plot_list), res) if plot_list else 0
+    if plot_list:
+        _, _, base_width, base_height = _plot_old_viewport(plot_list[scale_index])
+        res.setdefault("climaraBasePlotWidthF", base_width)
+        res.setdefault("climaraBasePlotHeightF", base_height)
+
+    layout = compute_panel_rects(len(plot_list), res, dims)
+
+    panel = HluPanel(
+        name=str(res.get("name", "panel")),
+        resources=res,
+        plots=[],
+    )
+
+    panel.resources["layout"] = layout
+    panel.resources["ncl_dims"] = dims
+    panel.resources["ncl_row_spec"] = layout.row_spec
+    panel.resources["ncl_scale"] = layout.scale
+
+    for index, plot in enumerate(plot_list):
+        if index >= len(layout.rects):
+            break
+
+        item = HluPanelItem(
+            plot=plot,
+            index=index,
+            rect=layout.rects[index],
+            resources=dict(res),
         )
 
-    print("")
+        _attach_panel_item(plot, item)
+
+        figure_string = _build_panel_figure_string(res, index)
+        if figure_string is not None:
+            if hasattr(plot, "add_child"):
+                plot.add_child(figure_string)
+            elif hasattr(plot, "children"):
+                plot.children.append(figure_string)
+
+        _panel_add_plot(panel, plot)
+        _panel_add_child(panel, item)
+
+    labelbar = _build_shared_labelbar(plot_list, res, layout)
+    if labelbar is not None:
+        _panel_add_child(panel, labelbar)
+        panel.resources["labelbar"] = labelbar
+
+    main_string = _build_panel_main_string(res)
+    if main_string is not None:
+        _panel_add_child(panel, main_string)
+        panel.resources["main_string"] = main_string
+
+    return panel
 
 
+def gsn_panel(
+    wks: Any,
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Create a GSN-style panel and attach it to a workstation if possible."""
 
-def _apply_panel_map_label_defaults(res):
-    """Return panel-map resources.
+    panel = build_panel(plots, dims, resources, **kwargs)
 
-    Coordinate label policy is applied later by _set_panel_tick_policy().
-    This keeps the default-off behavior for panel maps, while still allowing
-    users to re-enable labels with gsnPanelMapLabelsOn=True.
-    """
-    return res
+    if hasattr(wks, "add_child"):
+        wks.add_child(panel)
+    elif hasattr(wks, "children"):
+        wks.children.append(panel)
 
-def _labelbar_view_from_rect(rect):
-    """Convert [left, bottom, width, height] to an HLU-style View."""
-    left, bottom, width, height = rect
+    if _as_bool(panel.resources.get("gsnDraw"), True):
+        panel.draw()
 
-    return HluView(
-        vpXF=float(left),
-        vpYF=float(bottom + height),
-        vpWidthF=float(width),
-        vpHeightF=float(height),
-    )
+    if _as_bool(panel.resources.get("gsnFrame"), False) and hasattr(wks, "frame"):
+        wks.frame()
+
+    return panel
+
+
+def ncl_panel(
+    wks: Any,
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Alias for gsn_panel."""
+
+    return gsn_panel(wks, plots, dims, resources, **kwargs)
+
+
+def gsn_panel_maps(
+    wks: Any,
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Panel helper for map plots."""
+
+    return gsn_panel(wks, plots, dims, resources, **kwargs)
 
 
 def ncl_panel_maps(
-    data_list,
-    lon=None,
-    lat=None,
-    res=None,
-    titles=None,
-    ncols=2,
-    figsize=None,
-    common_labelbar=True,
-    wks=None,
-    panel_res_list=None,
-):
-    groups = split_resources(res)
-    panel_res = groups["gsn"]
-    mpres = groups["map"]
-    tmres = groups["tickmark"]
-    lbres = groups["labelbar"]
-    pmres = groups["plotmanager"]
+    wks: Any,
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Alias for gsn_panel_maps."""
 
-    mpres = {**mpres, **tmres}
-
-    n = len(data_list)
-
-    # gsn_panel layout needs both gsnPanel* and pmLabelBar* resources.
-    # split_resources() separates them into panel_res and pmres, but NCL's
-    # gsn_panel sees them together through the panel resource list.
-    layout_panel_res = {
-        **panel_res,
-        **pmres,
-    }
-
-    # Some labelbar orientation/style resources can also affect the panel
-    # labelbar placement policy.
-    for key in [
-        "lbOrientation",
-        "lbLabelPosition",
-        "lbTitlePosition",
-    ]:
-        if key in lbres:
-            layout_panel_res[key] = lbres[key]
-
-    if not common_labelbar:
-        layout_panel_res["gsnPanelLabelBar"] = False
-
-    # NCL-style panel layout is computed before any backend axes are created.
-    # The returned rects are only used as a temporary Matplotlib bridge.
-    layout_info = _panel_layout_info(
-        n,
-        ncols,
-        layout_panel_res,
-        plot_res=res,
-        common_labelbar=common_labelbar,
-    )
-    rects = layout_info["rects"]
-    ncols = layout_info["ncols"]
-    nrows = layout_info["nrows"]
-
-    # gsnPanelXF / gsnPanelYF are handled by compute_gsn_panel_layout().
-    layout_info = {**layout_info, "rects": rects}
-
-    _print_panel_debug(rects, layout_info, panel_res)
-
-    if figsize is not None:
-        fig = plt.figure(figsize=figsize)
-    elif hasattr(wks, "figure"):
-        fig = wks.figure()
-    else:
-        figsize = (4.2 * ncols, 3.6 * nrows)
-        fig = plt.figure(figsize=figsize)
-
-    axes = []
-    results = []
-
-    plot_res = _copy_res_without_labelbar(res)
-    plot_res["gsnFrame"] = False
-    plot_res = _apply_panel_map_label_defaults(plot_res)
-
-    if panel_res_list is None:
-        panel_res_list = [None] * n
-
-    if len(panel_res_list) != n:
-        raise ValueError(
-            "panel_res_list must have the same length as data_list "
-            f"({len(panel_res_list)} != {n})"
-        )
-
-    for i, data in enumerate(data_list):
-        this_res = dict(plot_res)
-
-        panel_specific_res = panel_res_list[i]
-
-        if panel_specific_res is not None:
-            this_res.update(_copy_res_without_labelbar(panel_specific_res))
-            this_res["gsnFrame"] = False
-            this_res = _apply_panel_map_label_defaults(this_res)
-
-        this_groups = split_resources(this_res)
-        this_mpres = {
-            **this_groups["map"],
-            **this_groups["tickmark"],
-        }
-
-        projection = create_projection(this_mpres)
-        ax = fig.add_axes(rects[i], projection=projection)
-
-        this_res = _set_panel_tick_policy(
-            this_res,
-            i,
-            ncols,
-            nrows,
-            panel_res,
-            layout_info=layout_info,
-        )
-
-        if titles is not None:
-            this_res["tiMainString"] = titles[i]
-
-        fig, ax, result = ncl_contour_map(
-            data,
-            lon=lon,
-            lat=lat,
-            res=this_res,
-            fig=fig,
-            ax=ax,
-        )
-
-        axes.append(ax)
-        results.append(result)
-
-    cbar = None
-    labelbar_object = None
-    labelbar_primitives = []
-    labelbar_artists = []
-
-    if common_labelbar and bool_resource(panel_res, "gsnPanelLabelBar", True):
-        first_mappable = None
-
-        for result in results:
-            if result["mappable"] is not None:
-                first_mappable = result["mappable"]
-                break
-
-        if first_mappable is not None:
-            side = _normalize_panel_labelbar_side(panel_res, lbres, pmres)
-            orientation = _normalize_panel_labelbar_orientation(side, panel_res, lbres)
-            labelbar_rect = layout_info.get("labelbar_rect")
-
-            if labelbar_rect is None:
-                labelbar_rect = _panel_labelbar_rect(fig, axes, panel_res, lbres, pmres)
-
-            panel_lbres = dict(lbres)
-            panel_lbres["lbLabelBarOn"] = True
-            panel_lbres.setdefault("lbOrientation", orientation)
-            panel_lbres.setdefault("lbLabelAutoStride", True)
-
-            if side in ["top", "bottom"]:
-                panel_lbres.setdefault("lbLabelPosition", "bottom" if side == "bottom" else "top")
-            else:
-                panel_lbres.setdefault("lbLabelPosition", "right" if side == "right" else "left")
-
-            if "gsnPanelLabelBarLabelFontHeightF" in panel_res:
-                panel_lbres["lbLabelFontHeightF"] = panel_res["gsnPanelLabelBarLabelFontHeightF"]
-
-            if "gsnPanelLabelBarTitleString" in panel_res:
-                panel_lbres["lbTitleString"] = panel_res["gsnPanelLabelBarTitleString"]
-
-            labelbar_view = _labelbar_view_from_rect(labelbar_rect)
-
-            labelbar_object = build_hlu_labelbar(
-                view=labelbar_view,
-                mappable=first_mappable,
-                lbres=panel_lbres,
-                pmres=pmres,
-            )
-            labelbar_primitives = list(labelbar_object.primitives)
-            labelbar_artists = render_ndc_primitives_mpl(fig, labelbar_primitives)
-
-            # Keep the old output key useful while the renderer is being refactored.
-            cbar = labelbar_object
+    return gsn_panel_maps(wks, plots, dims, resources, **kwargs)
 
 
-    figure_string_artists, figure_string_items = _add_panel_figure_strings(
-        fig,
-        axes,
-        panel_res,
-        return_items=True,
-    )
-    title_artists, title_items = _add_panel_row_col_titles(
-        fig,
-        axes,
-        ncols,
-        panel_res,
-        return_items=True,
-    )
+def panel(
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Build a panel object without attaching it to a workstation."""
 
-    main_title_artist = None
-    main_title_item = None
+    return build_panel(plots, dims, resources, **kwargs)
 
-    if "gsnPanelMainString" in panel_res:
-        main_title_item = _make_panel_text_item(
-            panel_res["gsnPanelMainString"],
-            0.5,
-            float(panel_res.get("gsnPanelMainYF", 0.98)),
-            "top_center",
-            float(panel_res.get("gsnPanelMainFontHeightF", 13)),
-            color=panel_res.get("gsnPanelMainFontColor", "black"),
-            name="gsnPanelMainString",
-            resources={
-                "fontweight": panel_res.get("gsnPanelMainFontWeight", "normal"),
-                "source": "gsnPanelMainString",
-            },
-        )
-        main_title_artist = _draw_panel_text_item_mpl(fig, main_title_item)
 
-    panel_text_items = [
-        *figure_string_items,
-        *title_items,
-    ]
+def draw_panel(
+    wks: Any,
+    plots: Sequence[Any],
+    dims: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluPanel:
+    """Compatibility alias for gsn_panel."""
 
-    if main_title_item is not None:
-        panel_text_items.append(main_title_item)
+    return gsn_panel(wks, plots, dims, resources, **kwargs)
 
-    out = {
-        "panel_results": results,
-        "colorbar": cbar,
-        "labelbar_object": labelbar_object,
-        "labelbar_primitives": labelbar_primitives,
-        "labelbar_artists": labelbar_artists,
-        "figure_string_artists": figure_string_artists,
-        "figure_string_items": figure_string_items,
-        "title_artists": title_artists,
-        "title_items": title_items,
-        "main_title_artist": main_title_artist,
-        "main_title_item": main_title_item,
-        "panel_text_items": panel_text_items,
-        "panel_layout": layout_info,
-        "panel_res_list": panel_res_list,
-        "groups": groups,
-    }
 
-    fig, _, out = apply_gsn_workflow(
-        fig,
-        ax=None,
-        out=out,
-        gsnres=panel_res,
-        wks=wks,
-    )
+def _set_panel_tick_policy(*args: Any, **kwargs: Any) -> Any:
+    if args:
+        return args[0]
+    return None
 
-    return fig, axes, out
+
+def _add_panel_labelbar(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+def _add_panel_strings(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+__all__ = [
+    "HluPanelItem",
+    "HluPanelLayout",
+    "build_panel",
+    "compute_gsn_panel_layout",
+    "compute_panel_rects",
+    "draw_panel",
+    "gsn_panel",
+    "gsn_panel_maps",
+    "ncl_panel",
+    "ncl_panel_maps",
+    "panel",
+]
