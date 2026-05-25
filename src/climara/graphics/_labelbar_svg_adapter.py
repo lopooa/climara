@@ -281,6 +281,22 @@ def _svg_func_code(value: Any) -> str:
     return out[0]
 
 
+def _svg_text_direction(value: Any) -> str:
+    if value is None:
+        return "Across"
+
+    key = str(value).strip().lower()
+    aliases = {
+        "across": "Across",
+        "nhlacross": "Across",
+        "down": "Down",
+        "nhldown": "Down",
+    }
+    if key not in aliases:
+        raise ValueError(f"Unsupported TextItem direction: {value!r}")
+    return aliases[key]
+
+
 def labelbar_geometry_to_svg_primitives(
     geometry: LabelBarGeometry,
     svg_width: float,
@@ -298,6 +314,7 @@ def labelbar_geometry_to_svg_primitives(
     perim_stroke: Any = "black",
     perim_stroke_width: float = 0.5,
     label_func_code: str = "~",
+    label_direction: str = "Across",
 ) -> SvgLabelBarPrimitives:
     ndc_polygons = compute_labelbar_box_polygons(geometry)
     polygon_count = len(ndc_polygons)
@@ -355,6 +372,7 @@ def labelbar_geometry_to_svg_primitives(
             text=text_values[index],
             angle=geometry.label_angle,
             fill=text_fill,
+            direction=label_direction,
             func_code=label_func_code,
         )
         for index, item in enumerate(geometry.label_text_positions)
@@ -392,6 +410,8 @@ def labelbar_to_svg_primitives(
         resources = {}
 
     label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
+    label_direction = _svg_text_direction(resources.get("lbLabelDirection", "Across"))
+
 
     box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
     box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
@@ -460,6 +480,7 @@ def labelbar_to_svg_primitives(
         perim_stroke=perim_stroke,
         perim_stroke_width=perim_stroke_width,
         label_func_code=label_func_code,
+        label_direction=label_direction,
     )
 
 

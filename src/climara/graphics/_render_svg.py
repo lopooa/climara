@@ -920,10 +920,10 @@ def _text_uses_plotchar_func_code(text_item) -> bool:
 
 def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str) -> None:
     direction = getattr(text_item, "direction", None)
-    if direction == "Down":
+    if direction not in (None, "Across"):
         raise NotImplementedError(
-            "NCL TextItem direction 'Down' is not implemented in the SVG renderer; "
-            "the TextItem real_string is preserved in the primitive layer, but the "
+            f"NCL TextItem direction {direction!r} is not implemented in the SVG renderer; "
+            "the TextItem real_string is preserved when available, but the "
             "renderer will not draw unsupported Plotchar vertical text."
         )
 
