@@ -2,9 +2,9 @@ from __future__ import annotations
 
 
 def ncl_thickness_to_mpl(value):
-    """Convert NCL gs*ThicknessF to temporary Matplotlib bridge linewidth.
+    """Convert NCL gs*ThicknessF to backend-neutral stroke width.
 
-    NCL thickness values are not the same as Matplotlib point widths.
+    NCL thickness values are converted to backend-neutral stroke widths.
     Keep the NCL resource value in objects, and only scale it in the
     current backend bridge.
     """

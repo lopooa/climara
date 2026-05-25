@@ -9,21 +9,21 @@ SUPPORTED_RESOURCES = [
         "resource": "ncl_draw",
         "status": "yes",
         "file": "_workstation.py",
-        "notes": "Draw a matplotlib figure.",
+        "notes": "Draw a graphics object.",
     },
     {
         "group": "Workstation",
         "resource": "ncl_frame",
         "status": "yes",
         "file": "_workstation.py",
-        "notes": "Save a matplotlib figure.",
+        "notes": "Save a graphics object.",
     },
     {
         "group": "Workstation",
         "resource": "ncl_close",
         "status": "yes",
         "file": "_workstation.py",
-        "notes": "Close matplotlib figures.",
+        "notes": "Close graphics objects.",
     },
     {
         "group": "Workstation",
@@ -488,7 +488,7 @@ SUPPORTED_RESOURCES = [
         "resource": "cnFillPalette",
         "status": "yes",
         "file": "_colors.py",
-        "notes": "Matplotlib colormap name or packaged .rgb colormap.",
+        "notes": "Color table name or packaged .rgb colormap.",
     },
     {
         "group": "ContourPlot",
@@ -502,7 +502,7 @@ SUPPORTED_RESOURCES = [
         "resource": "cnFillExtendMode",
         "status": "yes",
         "file": "_contour.py",
-        "notes": "Supports both, neither, min, max.",
+        "notes": "Supports two-side, no-side, minimum, maximum settings.",
     },
     {
         "group": "ContourPlot",
@@ -1062,7 +1062,7 @@ SUPPORTED_RESOURCES = [
         "resource": "cnLineLabelsOn / cnLineLabelInterval / cnLineLabelFormat",
         "status": "yes",
         "file": "_contour.py",
-        "notes": "Adds Matplotlib clabel support for NCL-style contour line labels.",
+        "notes": "Adds contour-label resource compatibility for NCL-style contour line labels.",
     },
     {
         "group": "ContourPlot",

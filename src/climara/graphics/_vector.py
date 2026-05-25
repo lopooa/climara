@@ -1,51 +1,68 @@
+"""
+Vector helpers returning backend-neutral HLU-style objects.
+"""
+
 from __future__ import annotations
 
-import numpy as np
-import cartopy.crs as ccrs
+from typing import Any, Mapping
 
-from ._coords import infer_lon_lat_2d, to_numpy_lon_lat
-from ._resources import split_resources
+from ._objects import HluVectorPlot, VectorField, as_resources
 
 
-def overlay_vector(ax, u, v, lon=None, lat=None, res=None):
-    """
-    Overlay a vector/quiver field with NCL-style vc resources.
-    """
-    groups = split_resources(res)
-    vcres = groups["vector"]
-
-    uarr, lon, lat = to_numpy_lon_lat(u, lon=lon, lat=lat)
-
-    if hasattr(v, "values"):
-        varr = v.values
-    else:
-        varr = np.asarray(v)
-
-    lon2d, lat2d = infer_lon_lat_2d(lon, lat)
-
-    stride = int(vcres.get("vcStride", vcres.get("vcMinDistanceF", 1)))
-    stride = max(stride, 1)
-
-    q = ax.quiver(
-        lon2d[::stride, ::stride],
-        lat2d[::stride, ::stride],
-        uarr[::stride, ::stride],
-        varr[::stride, ::stride],
-        color=vcres.get("vcGlyphStyleColor", vcres.get("vcVectorColor", "black")),
-        scale=vcres.get("vcRefMagnitudeF", None),
-        width=float(vcres.get("vcLineArrowThicknessF", 0.0025)),
-        transform=ccrs.PlateCarree() if hasattr(ax, "projection") else None,
-        zorder=float(vcres.get("vcZOrder", 25)),
+def build_vector_plot(
+    u: Any,
+    v: Any,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluVectorPlot:
+    res = as_resources(resources, **kwargs)
+    return HluVectorPlot(
+        name=str(res.get("name", "vector")),
+        resources=res,
+        u=u,
+        v=v,
     )
 
-    if "vcRefAnnoString1" in vcres:
-        ax.quiverkey(
-            q,
-            X=float(vcres.get("vcRefAnnoXF", 0.9)),
-            Y=float(vcres.get("vcRefAnnoYF", -0.08)),
-            U=float(vcres.get("vcRefMagnitudeF", 1.0)),
-            label=vcres["vcRefAnnoString1"],
-            labelpos="E",
-        )
 
-    return q
+def gsn_csm_vector(
+    wks: Any,
+    u: Any,
+    v: Any,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluVectorPlot:
+    plot = build_vector_plot(u, v, resources, **kwargs)
+    if hasattr(wks, "add_child"):
+        wks.add_child(plot)
+    return plot
+
+
+def gsn_csm_vector_map(
+    wks: Any,
+    u: Any,
+    v: Any,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluVectorPlot:
+    res = as_resources(resources, **kwargs)
+    res.setdefault("mpProjection", res.get("mpProjection", "CylindricalEquidistant"))
+    return gsn_csm_vector(wks, u, v, res)
+
+
+def vector_plot(
+    u: Any,
+    v: Any,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluVectorPlot:
+    return build_vector_plot(u, v, resources, **kwargs)
+
+
+__all__ = [
+    "HluVectorPlot",
+    "VectorField",
+    "build_vector_plot",
+    "gsn_csm_vector",
+    "gsn_csm_vector_map",
+    "vector_plot",
+]

@@ -1,138 +1,171 @@
+"""
+Color table helpers for climara graphics.
+
+The return type is a small Python object that stores normalized RGB triples.
+Backends can convert it to their own native representation.
+"""
+
 from __future__ import annotations
 
-from functools import lru_cache
-from importlib.resources import files
+from dataclasses import dataclass
 from pathlib import Path
-
-import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+from typing import Iterable, Sequence
 
 
-def ncl_color_to_mpl(value):
-    """Convert common NCL color names to Matplotlib-compatible colors.
+RgbTriple = tuple[float, float, float]
 
-    Examples
-    --------
-    gray42 -> "0.42"
-    grey70 -> "0.7"
-    transparent -> "none"
-    """
-    if value is None:
-        return None
 
-    if isinstance(value, (tuple, list)):
-        return value
+@dataclass(frozen=True)
+class HluColorMap:
+    """Backend-neutral color table."""
 
-    text = str(value).strip()
-    key = text.replace("_", "").replace("-", "").replace(" ", "").lower()
+    name: str
+    colors: tuple[RgbTriple, ...]
 
-    if key in ["none", "transparent", "no", "false", "off"]:
-        return "none"
+    def __len__(self) -> int:
+        return len(self.colors)
 
-    for prefix in ["gray", "grey"]:
-        if not key.startswith(prefix):
+    def __iter__(self):
+        return iter(self.colors)
+
+    def __getitem__(self, item):
+        return self.colors[item]
+
+    def to_hex_list(self) -> list[str]:
+        return [rgb_to_hex(value) for value in self.colors]
+
+
+_BUILTIN_TABLES: dict[str, tuple[RgbTriple, ...]] = {
+    "default": (
+        (0.2667, 0.0039, 0.3294),
+        (0.2824, 0.1400, 0.4575),
+        (0.2539, 0.2653, 0.5296),
+        (0.2068, 0.3718, 0.5531),
+        (0.1636, 0.4711, 0.5581),
+        (0.1276, 0.5669, 0.5506),
+        (0.1347, 0.6586, 0.5176),
+        (0.2669, 0.7488, 0.4406),
+        (0.4775, 0.8214, 0.3182),
+        (0.7414, 0.8734, 0.1496),
+        (0.9932, 0.9062, 0.1439),
+    ),
+    "greys": (
+        (0.0000, 0.0000, 0.0000),
+        (0.2500, 0.2500, 0.2500),
+        (0.5000, 0.5000, 0.5000),
+        (0.7500, 0.7500, 0.7500),
+        (1.0000, 1.0000, 1.0000),
+    ),
+}
+
+
+def _clean_channel(value: float) -> float:
+    value = float(value)
+    if value < 0.0:
+        return 0.0
+    if value > 1.0:
+        return 1.0
+    return value
+
+
+def normalize_rgb(values: Sequence[float]) -> RgbTriple:
+    """Normalize an RGB triple to the 0..1 range."""
+    if len(values) < 3:
+        raise ValueError("RGB values need at least three channels.")
+
+    rgb = [float(values[0]), float(values[1]), float(values[2])]
+    largest = sorted(abs(item) for item in rgb)[-1]
+    if largest > 1.0:
+        rgb = [item / 255.0 for item in rgb]
+    return tuple(_clean_channel(item) for item in rgb)  # type: ignore[return-value]
+
+
+def rgb_to_hex(values: Sequence[float]) -> str:
+    """Convert an RGB triple to a CSS-style hex string."""
+    red, green, blue = normalize_rgb(values)
+    return "#{:02x}{:02x}{:02x}".format(
+        round(red * 255.0),
+        round(green * 255.0),
+        round(blue * 255.0),
+    )
+
+
+def read_rgb_table(path: str | Path) -> list[RgbTriple]:
+    """Read a simple NCL-style .rgb table."""
+    table_path = Path(path)
+    if not table_path.exists():
+        raise FileNotFoundError(table_path)
+
+    colors: list[RgbTriple] = []
+    for raw_line in table_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith(";"):
             continue
 
-        number = key[len(prefix):]
+        parts = line.replace(",", " ").split()
+        if len(parts) < 3:
+            continue
 
         try:
-            gray = float(number)
+            values = [float(parts[0]), float(parts[1]), float(parts[2])]
         except ValueError:
             continue
 
-        if gray > 1.0:
-            gray = gray / 100.0
-
-        gray = min(max(gray, 0.0), 1.0)
-
-        return f"{gray:g}"
-
-    return text
-
-
-def _parse_rgb_line(line: str):
-    line = line.strip()
-
-    if not line or line.startswith("#") or line.startswith(";"):
-        return None
-
-    if "=" in line:
-        return None
-
-    parts = line.replace(",", " ").split()
-
-    if len(parts) < 3:
-        return None
-
-    try:
-        rgb = [float(parts[0]), float(parts[1]), float(parts[2])]
-    except ValueError:
-        return None
-
-    if max(rgb) > 1.0:
-        rgb = [v / 255.0 for v in rgb]
-
-    rgb = [min(max(v, 0.0), 1.0) for v in rgb]
-
-    return rgb
-
-
-def read_rgb_colormap(path: str | Path, name: str | None = None, listed: bool = True):
-    path = Path(path)
-    colors = []
-
-    with path.open("r", encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            rgb = _parse_rgb_line(line)
-            if rgb is not None:
-                colors.append(rgb)
+        colors.append(normalize_rgb(values))
 
     if not colors:
-        raise ValueError(f"No RGB colors found in {path}")
+        raise ValueError(f"No RGB rows were found in {table_path}.")
+    return colors
+
+
+def make_discrete_colormap(
+    colors: Iterable[Sequence[float]],
+    name: str = "climara_table",
+) -> HluColorMap:
+    """Create a backend-neutral color table from RGB triples."""
+    values = tuple(normalize_rgb(item) for item in colors)
+    if not values:
+        raise ValueError("At least one RGB triple is required.")
+    return HluColorMap(name=name, colors=values)
+
+
+def read_rgb_colormap(path: str | Path, name: str | None = None) -> HluColorMap:
+    """Read a color table from an .rgb file."""
+    table_path = Path(path)
+    cmap_name = name or table_path.stem
+    return make_discrete_colormap(read_rgb_table(table_path), name=cmap_name)
+
+
+def get_colormap(name: str | Path | HluColorMap | None = None) -> HluColorMap:
+    """Return a backend-neutral color table."""
+    if isinstance(name, HluColorMap):
+        return name
 
     if name is None:
-        name = path.stem
+        return HluColorMap(name="default", colors=_BUILTIN_TABLES["default"])
 
-    if listed:
-        return ListedColormap(colors, name=name)
+    candidate = Path(str(name))
+    if candidate.exists():
+        return read_rgb_colormap(candidate)
 
-    return LinearSegmentedColormap.from_list(name, colors)
+    key = str(name).lower()
+    if key not in _BUILTIN_TABLES:
+        raise ValueError(f"Unknown climara color table: {name!r}")
 
-
-@lru_cache(maxsize=128)
-def _get_package_rgb_path(name: str):
-    resource_dir = files("climara").joinpath("resources", "colormaps")
-    rgb_path = resource_dir.joinpath(f"{name}.rgb")
-
-    if rgb_path.is_file():
-        return rgb_path
-
-    return None
+    return HluColorMap(name=key, colors=_BUILTIN_TABLES[key])
 
 
-def get_colormap(name=None):
-    if name is None:
-        return plt.get_cmap("viridis")
-
-    path = Path(str(name))
-
-    if path.is_file():
-        return read_rgb_colormap(path)
-
-    rgb_path = _get_package_rgb_path(str(name))
-
-    if rgb_path is not None:
-        return read_rgb_colormap(rgb_path, name=str(name))
-
-    return plt.get_cmap(str(name))
+resolve_colormap = get_colormap
 
 
-def list_builtin_colormaps():
-    resource_dir = files("climara").joinpath("resources", "colormaps")
-    names = []
-
-    for item in resource_dir.iterdir():
-        if item.name.endswith(".rgb"):
-            names.append(item.name[:-4])
-
-    return sorted(names)
+__all__ = [
+    "HluColorMap",
+    "RgbTriple",
+    "get_colormap",
+    "make_discrete_colormap",
+    "normalize_rgb",
+    "read_rgb_colormap",
+    "read_rgb_table",
+    "resolve_colormap",
+    "rgb_to_hex",
+]

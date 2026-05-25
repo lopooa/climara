@@ -175,7 +175,7 @@ def _add_sign_agreement_box(wks, primitives, x1, x2, y1, y2, res):
 
 
 def gsn_panel_pattern_legend_ndc(wks, panel_layout, labelbar, res=None):
-    """Create Fig. 3.33-style spatial-pattern legend blocks.
+    """Create IPCC-style spatial-pattern legend blocks.
 
     This follows the NCL source geometry, but derives the final NDC position
     from the panel group and common labelbar object instead of hard-coding

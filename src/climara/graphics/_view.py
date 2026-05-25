@@ -40,7 +40,7 @@ class HluView:
         return self.vpYF - self.vpHeightF
 
     def as_mpl_rect(self):
-        """Return [left, bottom, width, height] for the temporary renderer bridge."""
+        """Return [left, bottom, width, height] for backend-neutral viewport mapping."""
         return [self.left, self.bottom, self.vpWidthF, self.vpHeightF]
 
     def copy(self):

@@ -1,474 +1,86 @@
+"""
+Tickmark resources represented without a drawing dependency.
+"""
+
 from __future__ import annotations
 
-import numpy as np
-import matplotlib.ticker as mticker
-
-from ._resources import bool_resource
-
-try:
-    from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
-except Exception:
-    LongitudeFormatter = None
-    LatitudeFormatter = None
-
-
-def _format_lon(x):
-    x = float(x)
-
-    if abs(x) < 1e-8:
-        return "0°"
-
-    if abs(abs(x) - 180) < 1e-8:
-        return "180°"
-
-    if x < 0:
-        return f"{abs(int(x))}°W"
-
-    return f"{int(x)}°E"
-
-
-def _format_lat(y):
-    y = float(y)
-
-    if abs(y) < 1e-8:
-        return "0°"
-
-    if y < 0:
-        return f"{abs(int(y))}°S"
-
-    return f"{int(y)}°N"
-
-
-
-def _normalize_lon_values_for_cartopy(values):
-    if values is None:
-        return None
-
-    if isinstance(values, str):
-        raw_values = values.replace(",", " ").split()
-    else:
-        try:
-            raw_values = list(values)
-        except TypeError:
-            raw_values = [values]
-
-    out = []
-    seen = set()
-
-    for value in raw_values:
-        original = float(value)
-        lon = original
-
-        if lon > 180.0 or lon < -180.0:
-            lon = ((lon + 180.0) % 360.0) - 180.0
-
-            if abs(lon + 180.0) < 1e-8 and original > 0:
-                lon = 180.0
-
-        key = round(lon, 10)
-
-        if key in seen:
-            continue
-
-        seen.add(key)
-        out.append(lon)
-
-    return out
-
-def _fixed_locator_from_values(values):
-    if values is None:
-        return None
-
-    return mticker.FixedLocator([float(v) for v in values])
-
-
-def _fixed_locator_from_spacing(vmin, vmax, spacing):
-    spacing = float(spacing)
-
-    if spacing <= 0:
-        return None
-
-    start = np.ceil(vmin / spacing) * spacing
-    values = np.arange(start, vmax + spacing * 0.5, spacing)
-
-    return mticker.FixedLocator(values)
-
-
-def _label_on(res, label_key, tick_key, grid_key=None, default=True):
-    if label_key in res:
-        return bool_resource(res, label_key, default)
-
-    if grid_key is not None and grid_key in res:
-        return bool_resource(res, grid_key, default)
-
-    return bool_resource(res, tick_key, default)
-
-
-def _first_value(res, keys, default=None):
-    for key in keys:
-        if key in res:
-            return res[key]
-
-    return default
-
-
-def _build_text_style(res, side, axis):
-    style = {}
-    common_size = _first_value(res, ["tmLabelFontHeightF", "mpGridLabelFontHeightF"])
-    common_color = _first_value(res, ["tmLabelFontColor", "mpGridLabelFontColor"])
-    common_weight = _first_value(res, ["tmLabelFontWeight"])
-    common_angle = _first_value(res, ["tmLabelAngleF"])
-
-    size = _first_value(
-        res,
-        [f"tm{side}LabelFontHeightF", f"tm{axis}LabelFontHeightF"],
-        common_size,
-    )
-    color = _first_value(
-        res,
-        [f"tm{side}LabelFontColor", f"tm{axis}LabelFontColor"],
-        common_color,
-    )
-    weight = _first_value(
-        res,
-        [f"tm{side}LabelFontWeight", f"tm{axis}LabelFontWeight"],
-        common_weight,
-    )
-    angle = _first_value(
-        res,
-        [f"tm{side}LabelAngleF", f"tm{axis}LabelAngleF"],
-        common_angle,
-    )
-
-    if size is not None:
-        style["size"] = float(size)
-
-    if color is not None:
-        style["color"] = color
-
-    if weight is not None:
-        style["weight"] = weight
-
-    if angle is not None:
-        style["rotation"] = float(angle)
-
-    if bool_resource(res, "tmLabelClipOn", True):
-        style["clip_on"] = True
-
-    return style
-
-
-def _set_degree_formatters(gl, res):
-    use_degrees = bool_resource(res, "tmUseDegreeLabels", True)
-
-    if not use_degrees:
-        return gl
-
-    if LongitudeFormatter is not None and LatitudeFormatter is not None:
-        gl.xformatter = LongitudeFormatter(zero_direction_label=False)
-        gl.yformatter = LatitudeFormatter()
-    else:
-        gl.xformatter = mticker.FuncFormatter(lambda x, pos: _format_lon(x))
-        gl.yformatter = mticker.FuncFormatter(lambda y, pos: _format_lat(y))
-
-    return gl
-
-
-def _clip_axis_ticklabels(ax):
-    for label in ax.get_xticklabels() + ax.get_yticklabels():
-        label.set_clip_on(True)
-
-        try:
-            label.set_clip_path(ax.patch)
-        except Exception:
-            pass
-
-
-def build_grid_locators(res):
-    """
-    Build x/y locators from NCL-style tm/mp resources.
-    """
-    x_values = res.get("tmXBValues", res.get("tmXTValues", res.get("mpGridLonValues", None)))
-    y_values = res.get("tmYLValues", res.get("tmYRValues", res.get("mpGridLatValues", None)))
-
-    xlocs = _fixed_locator_from_values(_normalize_lon_values_for_cartopy(x_values))
-    ylocs = _fixed_locator_from_values(y_values)
-
-    if xlocs is None:
-        lon_spacing = res.get("mpGridLonSpacingF", res.get("mpGridSpacingF", None))
-
-        if lon_spacing is not None:
-            xlocs = _fixed_locator_from_spacing(-180, 180, lon_spacing)
-
-    if ylocs is None:
-        lat_spacing = res.get("mpGridLatSpacingF", res.get("mpGridSpacingF", None))
-
-        if lat_spacing is not None:
-            ylocs = _fixed_locator_from_spacing(-90, 90, lat_spacing)
-
-    return xlocs, ylocs
-
-
-
-def _disable_gridliner_labels(gl):
-    if gl is None:
-        return None
-
-    names = [
-        "bottom_labels",
-        "top_labels",
-        "left_labels",
-        "right_labels",
-        "xlabels_bottom",
-        "xlabels_top",
-        "ylabels_left",
-        "ylabels_right",
-    ]
-
-    for name in names:
-        try:
-            setattr(gl, name, False)
-        except Exception:
-            pass
-
-    artist_names = [
-        "label_artists",
-        "xlabel_artists",
-        "ylabel_artists",
-        "top_label_artists",
-        "bottom_label_artists",
-        "left_label_artists",
-        "right_label_artists",
-    ]
-
-    for name in artist_names:
-        artists = getattr(gl, name, None)
-
-        if artists is None:
-            continue
-
-        if not isinstance(artists, (list, tuple)):
-            artists = [artists]
-
-        for artist in artists:
-            try:
-                artist.set_visible(False)
-            except Exception:
-                pass
-
-    return gl
-
-def apply_gridliner_labels(gl, res):
-    """
-    Apply NCL-style tickmark resources to Cartopy gridliner.
-
-    Supported resources include the four NCL tick sides:
-    tmXB, tmXT, tmYL, tmYR.  The *LabelsOn resources are separated from
-    tick visibility so panel plots can hide interior labels without turning
-    gridlines off.
-    """
-    if gl is None:
-        return None
-
-    if "mpGridLabelsOn" in res and not bool_resource(res, "mpGridLabelsOn", False):
-        return _disable_gridliner_labels(gl)
-
-    gl.bottom_labels = _label_on(
-        res,
-        "tmXBLabelsOn",
-        "tmXBOn",
-        grid_key="mpGridBottomLabelsOn",
-        default=True,
-    )
-    gl.top_labels = _label_on(
-        res,
-        "tmXTLabelsOn",
-        "tmXTOn",
-        grid_key="mpGridTopLabelsOn",
-        default=False,
-    )
-    gl.left_labels = _label_on(
-        res,
-        "tmYLLabelsOn",
-        "tmYLOn",
-        grid_key="mpGridLeftLabelsOn",
-        default=True,
-    )
-    gl.right_labels = _label_on(
-        res,
-        "tmYRLabelsOn",
-        "tmYROn",
-        grid_key="mpGridRightLabelsOn",
-        default=False,
-    )
-
-    x_style = _build_text_style(res, "XB", "X")
-    y_style = _build_text_style(res, "YL", "Y")
-
-    if x_style:
-        gl.xlabel_style = x_style
-
-    if y_style:
-        gl.ylabel_style = y_style
-
-    xpadding = _first_value(res, ["tmXBLabelDeltaF", "tmXTLabelDeltaF", "mpGridXLabelPaddingF"])
-    ypadding = _first_value(res, ["tmYLLabelDeltaF", "tmYRLabelDeltaF", "mpGridYLabelPaddingF"])
-
-    if xpadding is not None:
-        gl.xpadding = float(xpadding)
-
-    if ypadding is not None:
-        gl.ypadding = float(ypadding)
-
-    rotate_labels = res.get("tmGridRotateLabels", None)
-
-    if rotate_labels is not None:
-        gl.rotate_labels = bool_resource(res, "tmGridRotateLabels", False)
-
-    _set_degree_formatters(gl, res)
-
-    return gl
-
-
-def _set_axis_label_style(labels, res, side, axis):
-    size = _first_value(
-        res,
-        [f"tm{side}LabelFontHeightF", f"tm{axis}LabelFontHeightF", "tmLabelFontHeightF"],
-    )
-    color = _first_value(
-        res,
-        [f"tm{side}LabelFontColor", f"tm{axis}LabelFontColor", "tmLabelFontColor"],
-    )
-    weight = _first_value(
-        res,
-        [f"tm{side}LabelFontWeight", f"tm{axis}LabelFontWeight", "tmLabelFontWeight"],
-    )
-    angle = _first_value(
-        res,
-        [f"tm{side}LabelAngleF", f"tm{axis}LabelAngleF", "tmLabelAngleF"],
-    )
-
-    for label in labels:
-        if size is not None:
-            label.set_fontsize(float(size))
-
-        if color is not None:
-            label.set_color(color)
-
-        if weight is not None:
-            label.set_fontweight(weight)
-
-        if angle is not None:
-            label.set_rotation(float(angle))
-
-        if bool_resource(res, "tmLabelClipOn", True):
-            label.set_clip_on(True)
-
-
-
-def _is_geoaxes(ax):
-    return hasattr(ax, "projection")
-
-
-def _clear_plain_axis_ticks(ax):
-    try:
-        import matplotlib.ticker as mticker
-        ax.xaxis.set_major_locator(mticker.NullLocator())
-        ax.yaxis.set_major_locator(mticker.NullLocator())
-        ax.xaxis.set_minor_locator(mticker.NullLocator())
-        ax.yaxis.set_minor_locator(mticker.NullLocator())
-    except Exception:
-        pass
-
-    try:
-        ax.set_xticks([])
-        ax.set_yticks([])
-    except Exception:
-        pass
-
-    try:
-        ax.tick_params(
-            bottom=False,
-            top=False,
-            left=False,
-            right=False,
-            labelbottom=False,
-            labeltop=False,
-            labelleft=False,
-            labelright=False,
-        )
-    except Exception:
-        pass
-
-    try:
-        labels = ax.get_xticklabels() + ax.get_yticklabels()
-    except Exception:
-        labels = []
-
-    for label in labels:
-        try:
-            label.set_visible(False)
-        except Exception:
-            pass
-
-    try:
-        ax.xaxis.set_visible(False)
-        ax.yaxis.set_visible(False)
-    except Exception:
-        pass
-
-def apply_plain_axis_ticks(ax, res):
-    """
-    Apply tick controls for plain Matplotlib axes.
-    For GeoAxes, longitude/latitude labels should be handled by Cartopy gridliner.
-    """
-    if _is_geoaxes(ax) and not bool_resource(res, "tmPlainAxisTicksOn", False):
-        _clear_plain_axis_ticks(ax)
-        return ax
-
-    if not bool_resource(res, "tmBorderOn", True):
-        for spine in getattr(ax, "spines", {}).values():
-            spine.set_visible(False)
-
-    if "tmXBValues" in res:
-        ax.set_xticks([float(v) for v in res["tmXBValues"]])
-    elif "tmXTValues" in res:
-        ax.set_xticks([float(v) for v in res["tmXTValues"]])
-
-    if "tmYLValues" in res:
-        ax.set_yticks([float(v) for v in res["tmYLValues"]])
-    elif "tmYRValues" in res:
-        ax.set_yticks([float(v) for v in res["tmYRValues"]])
-
-    if "tmXBLabels" in res:
-        ax.set_xticklabels(res["tmXBLabels"])
-    elif "tmXTLabels" in res:
-        ax.set_xticklabels(res["tmXTLabels"])
-
-    if "tmYLLabels" in res:
-        ax.set_yticklabels(res["tmYLLabels"])
-    elif "tmYRLabels" in res:
-        ax.set_yticklabels(res["tmYRLabels"])
-
-    ax.tick_params(
-        bottom=bool_resource(res, "tmXBOn", True),
-        top=bool_resource(res, "tmXTOn", False),
-        left=bool_resource(res, "tmYLOn", True),
-        right=bool_resource(res, "tmYROn", False),
-        labelbottom=_label_on(res, "tmXBLabelsOn", "tmXBOn", default=True),
-        labeltop=_label_on(res, "tmXTLabelsOn", "tmXTOn", default=False),
-        labelleft=_label_on(res, "tmYLLabelsOn", "tmYLOn", default=True),
-        labelright=_label_on(res, "tmYRLabelsOn", "tmYROn", default=False),
-        direction=res.get("tmTickDirection", "out"),
-        length=float(res.get("tmMajorLengthF", 4.0)),
-        width=float(res.get("tmMajorThicknessF", 0.8)),
-        pad=float(res.get("tmLabelPadF", res.get("tmXBLabelDeltaF", 3.5))),
-    )
-
-    _set_axis_label_style(ax.get_xticklabels(), res, "XB", "X")
-    _set_axis_label_style(ax.get_yticklabels(), res, "YL", "Y")
-
-    if bool_resource(res, "tmLabelClipOn", True):
-        _clip_axis_ticklabels(ax)
-
-    return ax
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Sequence
+
+
+@dataclass
+class HluTickMark:
+    """Tickmark description."""
+
+    side: str
+    values: list[Any] = field(default_factory=list)
+    labels: list[str] = field(default_factory=list)
+    resources: dict[str, Any] = field(default_factory=dict)
+
+
+def _list_value(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Sequence):
+        return list(value)
+    return [value]
+
+
+def build_tickmark(
+    side: str,
+    values: Any = None,
+    labels: Any = None,
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> HluTickMark:
+    res: dict[str, Any] = {}
+    if resources:
+        res.update(dict(resources))
+    res.update(kwargs)
+
+    vals = _list_value(values)
+    labs = [str(item) for item in _list_value(labels)]
+    if not labs and vals:
+        labs = [str(item) for item in vals]
+
+    return HluTickMark(side=side, values=vals, labels=labs, resources=res)
+
+
+def build_tickmarks(resources: Mapping[str, Any] | None = None, **kwargs: Any) -> list[HluTickMark]:
+    res: dict[str, Any] = {}
+    if resources:
+        res.update(dict(resources))
+    res.update(kwargs)
+
+    items: list[HluTickMark] = []
+    for side, prefix in [
+        ("bottom", "tmXB"),
+        ("top", "tmXT"),
+        ("left", "tmYL"),
+        ("right", "tmYR"),
+    ]:
+        values = res.get(f"{prefix}Values")
+        labels = res.get(f"{prefix}Labels")
+        if values is not None or labels is not None:
+            items.append(build_tickmark(side, values, labels, res))
+    return items
+
+
+def add_tickmarks(target: Any, resources: Mapping[str, Any] | None = None, **kwargs: Any) -> list[HluTickMark]:
+    items = build_tickmarks(resources, **kwargs)
+    for item in items:
+        if hasattr(target, "add_child"):
+            target.add_child(item)
+        elif hasattr(target, "children"):
+            target.children.append(item)
+    return items
+
+
+__all__ = [
+    "HluTickMark",
+    "add_tickmarks",
+    "build_tickmark",
+    "build_tickmarks",
+]

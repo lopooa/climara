@@ -102,7 +102,7 @@ def _default_reference_view(plot_res, page_aspect=1.0):
         orig wdt,hgt = 0.62,0.62
 
     The page aspect is intentionally not used here. NCL panel layout works
-    from HLU View and BoundingBox resources, not from a Matplotlib figsize.
+    from HLU View and BoundingBox resources, not from a backend canvas size.
     """
     plot_res = dict(plot_res or {})
 
@@ -180,10 +180,10 @@ def compute_gsn_panel_layout(
 ):
     """Compute a backend-independent NCL-style gsn_panel layout.
 
-    This function intentionally does not import Matplotlib.
+    This function is backend-neutral.
 
     The returned HluView objects are the authoritative layout result.
-    The rects are only a temporary bridge for the current Matplotlib renderer.
+    The rects describe backend-neutral panel viewports.
     """
 
     panel_res = dict(panel_res or {})
