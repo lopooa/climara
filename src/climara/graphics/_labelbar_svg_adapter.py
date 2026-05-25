@@ -452,7 +452,7 @@ def labelbar_to_svg_primitives(
     svg_height: float,
     *,
     stroke: Any = "black",
-    text_fill: Any = "black",
+    text_fill: Any | None = None,
 ) -> SvgLabelBarPrimitives:
     if hasattr(obj, "compute_geometry"):
         geometry = obj.compute_geometry()
@@ -465,6 +465,9 @@ def labelbar_to_svg_primitives(
     resources = getattr(obj, "resources", None)
     if not isinstance(resources, dict):
         resources = {}
+
+    if text_fill is None:
+        text_fill = resources.get("lbLabelFontColor", "black")
 
     label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
     label_direction = _svg_text_direction(resources.get("lbLabelDirection", "Across"))
