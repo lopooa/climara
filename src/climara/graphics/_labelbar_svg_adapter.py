@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ._text_semantics import build_text_item_semantics
+
 from ._labelbar_geometry import (
     LabelBarGeometry,
     NdcPoint,
@@ -417,26 +419,44 @@ def labelbar_geometry_to_svg_primitives(
     for item in geometry.label_text_positions:
         text_value = str(item.text)
         point = ndc_to_svg_point(item.x, item.y, svg_width, svg_height)
+
+        semantics = build_text_item_semantics(
+            text_value,
+            direction=label_direction,
+            func_code=label_func_code,
+            just=label_just,
+            angle=geometry.label_angle,
+            font=label_font,
+            font_color=text_fill,
+            font_height=label_font_height,
+            font_aspect=label_font_aspect,
+            font_thickness=label_font_thickness,
+            font_quality=label_font_quality,
+            constant_spacing=label_constant_spacing,
+        )
+
         text_primitives.append(
             SvgTextPrimitive(
                 x=point.x,
                 y=point.y,
-                text=text_value,
-                angle=geometry.label_angle,
-                fill=text_fill,
-                font_height=label_font_height,
-                just=label_just,
-                direction=label_direction,
-                font=label_font,
-                font_aspect=label_font_aspect,
-                font_thickness=label_font_thickness,
-                constant_spacing=label_constant_spacing,
-                real_string=_svg_text_real_string(text_value, label_direction, label_func_code),
-                func_code=label_func_code,
-                font_quality=label_font_quality,
-                quality_index=label_quality_index,
+                text=semantics.text,
+                angle=semantics.angle,
+                fill=semantics.font_color,
+                font_height=semantics.font_height,
+                just=semantics.just,
+                direction=semantics.direction,
+                font=semantics.font,
+                font_aspect=semantics.font_aspect,
+                font_thickness=semantics.font_thickness,
+                constant_spacing=semantics.constant_spacing,
+                real_string=semantics.real_string,
+                func_code=semantics.func_code,
+                font_quality=semantics.font_quality,
+                quality_index=semantics.quality_index,
             )
         )
+
+    texts = tuple(text_primitives)
 
     return SvgLabelBarPrimitives(
         polygons=polygons,
