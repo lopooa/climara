@@ -272,6 +272,15 @@ def _title_text_primitives(
     )
 
 
+def _svg_func_code(value: Any) -> str:
+    if value is None:
+        return "~"
+    out = str(value)
+    if not out:
+        return "~"
+    return out[0]
+
+
 def labelbar_geometry_to_svg_primitives(
     geometry: LabelBarGeometry,
     svg_width: float,
@@ -288,6 +297,7 @@ def labelbar_geometry_to_svg_primitives(
     perim_fill: Any = "none",
     perim_stroke: Any = "black",
     perim_stroke_width: float = 0.5,
+    label_func_code: str = "~",
 ) -> SvgLabelBarPrimitives:
     ndc_polygons = compute_labelbar_box_polygons(geometry)
     polygon_count = len(ndc_polygons)
@@ -345,6 +355,7 @@ def labelbar_geometry_to_svg_primitives(
             text=text_values[index],
             angle=geometry.label_angle,
             fill=text_fill,
+            func_code=label_func_code,
         )
         for index, item in enumerate(geometry.label_text_positions)
     )
@@ -379,6 +390,8 @@ def labelbar_to_svg_primitives(
     resources = getattr(obj, "resources", None)
     if not isinstance(resources, dict):
         resources = {}
+
+    label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
 
     box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
     box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
@@ -446,6 +459,7 @@ def labelbar_to_svg_primitives(
         perim_fill=perim_fill,
         perim_stroke=perim_stroke,
         perim_stroke_width=perim_stroke_width,
+        label_func_code=label_func_code,
     )
 
 

@@ -92,6 +92,7 @@ NCL_LABELBAR_DEFAULTS: dict[str, Any] = {
     "lbLabelDirection": "Across",
     "lbLabelJust": "CenterCenter",
     "lbLabelFontHeightF": 0.02,
+    "lbLabelFuncCode": "~",
     "lbLabelStride": 1,
     "lbBoxLinesOn": True,
     "lbBoxSeparatorLinesOn": True,
