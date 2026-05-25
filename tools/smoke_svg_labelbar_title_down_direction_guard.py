@@ -26,7 +26,7 @@ def main():
     except NotImplementedError as exc:
         message = str(exc)
         assert "TextItem direction 'Down'" in message
-        assert "will not fake Plotchar vertical text" in message
+        assert "will not draw unsupported Plotchar vertical text" in message
     else:
         raise AssertionError("Down-direction title should not be rendered as fake horizontal SVG text")
 

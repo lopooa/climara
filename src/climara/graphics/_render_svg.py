@@ -906,13 +906,32 @@ def _svg_text_font_size(text_item, doc, default_size: float) -> float:
     return max(1.0, _num(font_height, default_size / doc.height) * doc.height)
 
 
+def _text_uses_plotchar_func_code(text_item) -> bool:
+    func_code = getattr(text_item, "func_code", None)
+    if func_code is None:
+        return False
+
+    func_code = str(func_code)
+    if not func_code:
+        return False
+
+    return func_code in str(getattr(text_item, "text", ""))
+
+
 def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str) -> None:
     direction = getattr(text_item, "direction", None)
     if direction == "Down":
         raise NotImplementedError(
-            "NCL TextItem direction 'Down' is not yet implemented in the SVG renderer; "
+            "NCL TextItem direction 'Down' is not implemented in the SVG renderer; "
             "the TextItem real_string is preserved in the primitive layer, but the "
-            "renderer will not fake Plotchar vertical text."
+            "renderer will not draw unsupported Plotchar vertical text."
+        )
+
+    if _text_uses_plotchar_func_code(text_item):
+        raise NotImplementedError(
+            "NCL TextItem Plotchar function-code sequences are not implemented in the SVG renderer; "
+            "the TextItem real_string and func_code are preserved in the primitive layer, but the "
+            "renderer will not draw function-code text as plain SVG text."
         )
 
     doc.add(
@@ -922,6 +941,7 @@ def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str)
         f'text-anchor="{anchor}"{_svg_text_transform(text_item)}>'
         f'{escape(str(text_item.text))}</text>'
     )
+
 
 
 def _render_labelbar(obj, doc, viewport=None):
