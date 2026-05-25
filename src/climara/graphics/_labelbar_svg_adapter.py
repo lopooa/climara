@@ -32,6 +32,10 @@ class SvgTextPrimitive:
     text: str
     angle: float
     fill: Any
+    font_height: float | None = None
+    just: Any | None = None
+    direction: Any | None = None
+    font: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,7 @@ class SvgLabelBarPrimitives:
     orientation: str
     label_alignment: str
     label_position: str
+    title_texts: tuple[SvgTextPrimitive, ...] = ()
 
 
 def ndc_to_svg_point(x: float, y: float, svg_width: float, svg_height: float) -> SvgPoint:
@@ -233,6 +238,32 @@ def _perim_polygon(
     )
 
 
+def _title_text_primitives(
+    geometry: LabelBarGeometry,
+    svg_width: float,
+    svg_height: float,
+) -> tuple[SvgTextPrimitive, ...]:
+    item = getattr(geometry, "title_text_item", None)
+    if item is None:
+        return ()
+
+    point = ndc_to_svg_point(item.x, item.y, svg_width, svg_height)
+
+    return (
+        SvgTextPrimitive(
+            x=point.x,
+            y=point.y,
+            text=item.text,
+            angle=item.angle,
+            fill=item.font_color,
+            font_height=item.font_height,
+            just=item.just,
+            direction=item.direction,
+            font=item.font,
+        ),
+    )
+
+
 def labelbar_geometry_to_svg_primitives(
     geometry: LabelBarGeometry,
     svg_width: float,
@@ -317,6 +348,7 @@ def labelbar_geometry_to_svg_primitives(
         orientation=geometry.orientation,
         label_alignment=geometry.label_alignment,
         label_position=geometry.label_position,
+        title_texts=_title_text_primitives(geometry, svg_width, svg_height),
     )
 
 
