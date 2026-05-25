@@ -17,6 +17,9 @@ from ._objects import HluPanel, as_resources
 from ._text_item import HluTextItem
 
 def _labelbar_bottom_rect_to_view_rect(rect):
+    if rect is None:
+        return None
+
     x, bottom, width, height = rect
     return (x, bottom + height, width, height)
 
