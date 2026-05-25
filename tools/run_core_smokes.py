@@ -30,6 +30,7 @@ def main():
     run_if_exists("tools/smoke_multitext_bbox_request_builder.py")
     run_if_exists("tools/smoke_text_bbox_coordinate_space_contract.py")
     run_if_exists("tools/smoke_text_bbox_union_contract.py")
+    run_if_exists("tools/smoke_multitext_child_bbox_aggregation.py")
     run_if_exists("tools/run_labelbar_textitem_smokes.py")
 
     print("✅ core smoke bundle passed")

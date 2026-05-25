@@ -200,7 +200,29 @@ def union_text_bboxes(
     )
 
 
+def aggregate_multitext_child_bboxes(
+    request: MultiTextBBoxRequest,
+    child_bboxes: Iterable[TextBBox],
+) -> TextBBox:
+    _normalize_coordinate_space(request.coordinate_space)
+    box_values = tuple(child_bboxes)
+
+    if len(box_values) != len(request.items):
+        raise ValueError(
+            "MultiText child bbox aggregation requires one child bbox for each TextItem request"
+        )
+
+    if not box_values:
+        raise ValueError("Cannot aggregate MultiText bbox from an empty child bbox sequence")
+
+    return union_text_bboxes(
+        box_values,
+        coordinate_space=request.coordinate_space,
+    )
+
+
 __all__ = [
+    "aggregate_multitext_child_bboxes",
     "TEXT_BBOX_COORD_NDC",
     "MultiTextBBoxRequest",
     "TextBBox",
