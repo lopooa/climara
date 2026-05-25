@@ -30,6 +30,15 @@ def assert_semantics_equal(actual, expected):
     almost_equal(actual.constant_spacing, expected.constant_spacing)
 
 
+def assert_ndc_position(x, y):
+    assert isinstance(x, float), type(x)
+    assert isinstance(y, float), type(y)
+    assert x == x, x
+    assert y == y, y
+    assert abs(x) < 10.0, x
+    assert abs(y) < 10.0, y
+
+
 def main():
     title_lb = HluLabelBar(
         name="bbox_request_labelbar",
@@ -70,13 +79,29 @@ def main():
         constant_spacing=0.2,
     )
 
+    title_semantics = build_text_item_semantics(
+        title_geom.title_text_item.text,
+        direction=title_geom.title_text_item.direction,
+        func_code=title_geom.title_text_item.func_code,
+        just=title_geom.title_text_item.just,
+        angle=title_geom.title_text_item.angle,
+        font=title_geom.title_text_item.font,
+        font_color=title_geom.title_text_item.font_color,
+        font_height=title_geom.title_text_item.font_height,
+        font_aspect=title_geom.title_text_item.font_aspect,
+        font_thickness=title_geom.title_text_item.font_thickness,
+        font_quality=title_geom.title_text_item.font_quality,
+        constant_spacing=title_geom.title_text_item.constant_spacing,
+    )
+
     title_request = build_text_item_bbox_request(
-        title_geom.title_text_item,
+        title_semantics,
         x=title_geom.title_text_item.x,
         y=title_geom.title_text_item.y,
     )
 
     assert title_request.coordinate_space == TEXT_BBOX_COORD_NDC
+    assert_ndc_position(title_request.x, title_request.y)
     assert_semantics_equal(title_request.semantics, expected_title)
     almost_equal(title_request.x, title_geom.title_text_item.x)
     almost_equal(title_request.y, title_geom.title_text_item.y)
@@ -100,8 +125,11 @@ def main():
         },
     )
 
+    label_geom = label_lb.compute_geometry()
     primitives = labelbar_to_svg_primitives(label_lb, 900, 500)
+
     assert primitives.texts
+    assert len(label_geom.label_text_positions) == len(primitives.texts)
 
     label_multitext = build_multitext_semantics(
         [text.text for text in primitives.texts],
@@ -118,11 +146,17 @@ def main():
         constant_spacing=0.1,
     )
 
-    label_positions = tuple((text.x, text.y) for text in primitives.texts)
+    label_positions_ndc = tuple(
+        (item.x, item.y)
+        for item in label_geom.label_text_positions
+    )
+
+    for x, y in label_positions_ndc:
+        assert_ndc_position(x, y)
 
     multi_request = build_multitext_bbox_request_from_semantics(
         label_multitext,
-        label_positions,
+        label_positions_ndc,
     )
 
     assert multi_request.coordinate_space == TEXT_BBOX_COORD_NDC
@@ -131,18 +165,21 @@ def main():
     assert multi_request.items[0].semantics.text == "A"
     assert multi_request.items[0].semantics.real_string == "%A%A"
     assert multi_request.items[0].semantics.font_color == "blue"
-    almost_equal(multi_request.items[0].x, primitives.texts[0].x)
-    almost_equal(multi_request.items[0].y, primitives.texts[0].y)
 
-    for request, primitive in zip(multi_request.items, primitives.texts):
+    for request, primitive, ndc_position in zip(
+        multi_request.items,
+        primitives.texts,
+        label_positions_ndc,
+    ):
         assert request.coordinate_space == TEXT_BBOX_COORD_NDC
         assert request.semantics.text == primitive.text
         assert request.semantics.real_string == primitive.real_string
         assert request.semantics.direction == primitive.direction
         assert request.semantics.func_code == primitive.func_code
         assert request.semantics.font_color == primitive.fill
-        almost_equal(request.x, primitive.x)
-        almost_equal(request.y, primitive.y)
+        almost_equal(request.x, ndc_position[0])
+        almost_equal(request.y, ndc_position[1])
+        assert_ndc_position(request.x, request.y)
 
     print("✅ LabelBar TextItem bbox request contract smoke passed")
 
