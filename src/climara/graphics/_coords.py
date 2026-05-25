@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from cartopy.util import add_cyclic_point
+from ._cyclic import add_cyclic_point_1d
 
 _LON_NAMES = ["lon", "longitude", "x", "X"]
 _LAT_NAMES = ["lat", "latitude", "y", "Y"]
@@ -116,6 +116,6 @@ def add_cyclic(data, lon=None, lat=None, axis=-1):
     if has_global_cyclic_lon(lon):
         return arr, lon, lat
 
-    arr_cyc, lon_cyc = add_cyclic_point(arr, coord=lon, axis=axis)
+    arr_cyc, lon_cyc = add_cyclic_point_1d(arr, coord=lon, axis=axis)
 
     return arr_cyc, lon_cyc, lat

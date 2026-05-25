@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from cartopy.util import add_cyclic_point
+from ._cyclic import add_cyclic_point_1d
 
 
 def guess_coord_name(data, candidates):
@@ -65,7 +65,7 @@ def maybe_add_cyclic(arr, lon, add_cyclic=True):
     if span >= 359.0:
         return arr, lon
 
-    arr_cyclic, lon_cyclic = add_cyclic_point(arr, coord=lon, axis=-1)
+    arr_cyclic, lon_cyclic = add_cyclic_point_1d(arr, coord=lon, axis=-1)
 
     return arr_cyclic, lon_cyclic
 

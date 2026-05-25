@@ -17,8 +17,6 @@ dependencies = [
     "netCDF4",
     "h5netcdf",
     "pyyaml",
-    "matplotlib",
-    "cartopy",
     "scipy",
 ]
 
