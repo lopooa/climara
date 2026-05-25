@@ -877,6 +877,45 @@ def _labelbar_pick(res, *names, default=None):
     return default
 
 
+def _svg_title_anchor(text_item) -> str:
+    just = str(getattr(text_item, "just", "CenterCenter"))
+
+    if just.endswith("Left"):
+        return "start"
+    if just.endswith("Right"):
+        return "end"
+    return "middle"
+
+
+def _svg_text_transform(text_item) -> str:
+    angle = getattr(text_item, "angle", 0.0)
+    if not angle:
+        return ""
+
+    return (
+        f' transform="rotate({float(angle):.3f} '
+        f'{float(text_item.x):.3f} {float(text_item.y):.3f})"'
+    )
+
+
+def _svg_text_font_size(text_item, doc, default_size: float) -> float:
+    font_height = getattr(text_item, "font_height", None)
+    if font_height is None:
+        return default_size
+
+    return max(1.0, _num(font_height, default_size / doc.height) * doc.height)
+
+
+def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str) -> None:
+    doc.add(
+        f'<text x="{float(text_item.x):.3f}" y="{float(text_item.y):.3f}" '
+        f'font-size="{font_size:.3f}" '
+        f'fill="{escape(_color(text_item.fill))}" '
+        f'text-anchor="{anchor}"{_svg_text_transform(text_item)}>'
+        f'{escape(str(text_item.text))}</text>'
+    )
+
+
 def _render_labelbar(obj, doc, viewport=None):
     from ._labelbar_svg_adapter import labelbar_to_svg_primitives
 
@@ -915,6 +954,14 @@ def _render_labelbar(obj, doc, viewport=None):
             f'stroke-width="{line.stroke_width:.3f}" />'
         )
 
+    for title_item in getattr(primitives, "title_texts", ()):
+        _render_svg_text_primitive(
+            doc,
+            title_item,
+            font_size=_svg_text_font_size(title_item, doc, font_size),
+            anchor=_svg_title_anchor(title_item),
+        )
+
     if primitives.orientation == "Horizontal":
         anchor = "middle"
     elif primitives.label_position == "Left":
@@ -923,18 +970,11 @@ def _render_labelbar(obj, doc, viewport=None):
         anchor = "start"
 
     for text_item in primitives.texts:
-        transform = ""
-        if text_item.angle:
-            transform = (
-                f' transform="rotate({text_item.angle:.3f} '
-                f'{text_item.x:.3f} {text_item.y:.3f})"'
-            )
-
-        doc.add(
-            f'<text x="{text_item.x:.3f}" y="{text_item.y:.3f}" '
-            f'font-size="{font_size:.3f}" '
-            f'fill="{escape(_color(text_item.fill))}" '
-            f'text-anchor="{anchor}"{transform}>{escape(str(text_item.text))}</text>'
+        _render_svg_text_primitive(
+            doc,
+            text_item,
+            font_size=font_size,
+            anchor=anchor,
         )
 
 def render_object(
