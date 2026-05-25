@@ -34,6 +34,8 @@ SMOKES = [
     "tools/smoke_labelbar_adjust_box_semantics.py",
     "tools/smoke_labelbar_adjust_box_semantics_boundary.py",
     "tools/smoke_labelbar_adjust_perim_semantics.py",
+    "tools/smoke_labelbar_adjust_writeback_semantics.py",
+    "tools/smoke_labelbar_adjust_writeback_semantics_not_used.py",
     "tools/smoke_labelbar_adjust_perim_semantics_not_used.py",
     "tools/smoke_labelbar_adjust_box_semantics_not_used.py",
     "tools/smoke_labelbar_adjust_bridge_not_used.py",
