@@ -1,8 +1,10 @@
 from climara.graphics._labelbar_object import HluLabelBar
 from climara.graphics._labelbar_svg_adapter import labelbar_to_svg_primitives
+from climara.graphics._multitext_semantics import build_multitext_semantics
 from climara.graphics._text_bbox import (
-    TextItemBBoxRequest,
-    build_multitext_bbox_request,
+    TEXT_BBOX_COORD_NDC,
+    build_multitext_bbox_request_from_semantics,
+    build_text_item_bbox_request,
 )
 from climara.graphics._text_semantics import build_text_item_semantics
 
@@ -68,12 +70,13 @@ def main():
         constant_spacing=0.2,
     )
 
-    title_request = TextItemBBoxRequest(
-        semantics=title_geom.title_text_item,
+    title_request = build_text_item_bbox_request(
+        title_geom.title_text_item,
         x=title_geom.title_text_item.x,
         y=title_geom.title_text_item.y,
     )
 
+    assert title_request.coordinate_space == TEXT_BBOX_COORD_NDC
     assert_semantics_equal(title_request.semantics, expected_title)
     almost_equal(title_request.x, title_geom.title_text_item.x)
     almost_equal(title_request.y, title_geom.title_text_item.y)
@@ -100,38 +103,46 @@ def main():
     primitives = labelbar_to_svg_primitives(label_lb, 900, 500)
     assert primitives.texts
 
-    label_requests = tuple(
-        TextItemBBoxRequest(
-            semantics=build_text_item_semantics(
-                text.text,
-                direction=text.direction,
-                func_code=text.func_code,
-                just=text.just,
-                angle=text.angle,
-                font=text.font,
-                font_color=text.fill,
-                font_height=text.font_height,
-                font_aspect=text.font_aspect,
-                font_thickness=text.font_thickness,
-                font_quality=text.font_quality,
-                constant_spacing=text.constant_spacing,
-            ),
-            x=text.x,
-            y=text.y,
-        )
-        for text in primitives.texts
+    label_multitext = build_multitext_semantics(
+        [text.text for text in primitives.texts],
+        direction="Across",
+        func_code="%",
+        just="BottomLeft",
+        angle=-30,
+        font=26,
+        font_color="blue",
+        font_height=0.03,
+        font_aspect=1.2,
+        font_thickness=1.5,
+        font_quality="Low",
+        constant_spacing=0.1,
     )
 
-    assert label_requests
-    assert label_requests[0].semantics.text == "A"
-    assert label_requests[0].semantics.real_string == "%A%A"
-    assert label_requests[0].semantics.font_color == "blue"
+    label_positions = tuple((text.x, text.y) for text in primitives.texts)
 
-    multi_request = build_multitext_bbox_request(label_requests)
+    multi_request = build_multitext_bbox_request_from_semantics(
+        label_multitext,
+        label_positions,
+    )
 
+    assert multi_request.coordinate_space == TEXT_BBOX_COORD_NDC
     assert len(multi_request.items) == len(primitives.texts)
+    assert multi_request.items[0].coordinate_space == TEXT_BBOX_COORD_NDC
     assert multi_request.items[0].semantics.text == "A"
     assert multi_request.items[0].semantics.real_string == "%A%A"
+    assert multi_request.items[0].semantics.font_color == "blue"
+    almost_equal(multi_request.items[0].x, primitives.texts[0].x)
+    almost_equal(multi_request.items[0].y, primitives.texts[0].y)
+
+    for request, primitive in zip(multi_request.items, primitives.texts):
+        assert request.coordinate_space == TEXT_BBOX_COORD_NDC
+        assert request.semantics.text == primitive.text
+        assert request.semantics.real_string == primitive.real_string
+        assert request.semantics.direction == primitive.direction
+        assert request.semantics.func_code == primitive.func_code
+        assert request.semantics.font_color == primitive.fill
+        almost_equal(request.x, primitive.x)
+        almost_equal(request.y, primitive.y)
 
     print("✅ LabelBar TextItem bbox request contract smoke passed")
 
