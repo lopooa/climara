@@ -36,6 +36,8 @@ class SvgTextPrimitive:
     just: Any | None = None
     direction: Any | None = None
     font: Any | None = None
+    real_string: str | None = None
+    func_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -260,6 +262,8 @@ def _title_text_primitives(
             just=item.just,
             direction=item.direction,
             font=item.font,
+            real_string=item.real_string,
+            func_code=item.func_code,
         ),
     )
 
