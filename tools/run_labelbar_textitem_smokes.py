@@ -5,6 +5,8 @@ from pathlib import Path
 
 SMOKES = [
     "tools/smoke_text_semantics.py",
+    "tools/smoke_multitext_semantics.py",
+    "tools/smoke_multitext_labelbar_bridge.py",
     "tools/smoke_text_semantics_labelbar_bridge.py",
     "tools/smoke_text_semantics_shared_delegation.py",
     "tools/smoke_text_semantics_no_drift.py",
