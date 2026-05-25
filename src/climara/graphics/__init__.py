@@ -148,6 +148,11 @@ _EXPORTS = {
         "gsn_left_string",
         "gsn_right_string",
     ],
+    "._labelbar_adjusted_svg_export": [
+        "add_adjusted_labelbar_primitives_to_svg_document",
+        "render_adjusted_labelbar_svg_from_supplied_plotchar_metrics",
+        "save_adjusted_labelbar_svg_from_supplied_plotchar_metrics",
+    ],
     "._render_svg": [
         "SvgDocument",
         "render_object",
