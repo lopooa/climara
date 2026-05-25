@@ -5,6 +5,7 @@ from pathlib import Path
 
 SMOKES = [
     "tools/smoke_text_bbox_guard.py",
+    "tools/smoke_ncl_text_bbox_source_map_doc.py",
     "tools/smoke_text_bbox_not_used_by_render_path.py",
     "tools/smoke_text_bbox_coordinate_space_contract.py",
     "tools/smoke_text_bbox_union_contract.py",
