@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from ._text_semantics import text_uses_func_code
+
 """
 SVG renderer for HLU-style graphics objects.
 
@@ -5,7 +9,6 @@ The plot renderer uses an HLU-style geometry split:
 outer rectangle, annotation rectangle, and data rectangle.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 from html import escape
@@ -907,16 +910,10 @@ def _svg_text_font_size(text_item, doc, default_size: float) -> float:
 
 
 def _text_uses_plotchar_func_code(text_item) -> bool:
-    func_code = getattr(text_item, "func_code", None)
-    if func_code is None:
-        return False
-
-    func_code = str(func_code)
-    if not func_code:
-        return False
-
-    return func_code in str(getattr(text_item, "text", ""))
-
+    return text_uses_func_code(
+        getattr(text_item, "text", ""),
+        getattr(text_item, "func_code", None),
+    )
 
 def _svg_text_data_attrs(text_item) -> str:
     pairs = (

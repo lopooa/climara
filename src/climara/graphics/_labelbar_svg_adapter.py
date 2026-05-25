@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from ._text_semantics import build_text_item_semantics
+from ._text_semantics import normalize_func_code, normalize_text_direction, text_quality_index, text_real_string
 
 from ._labelbar_geometry import (
     LabelBarGeometry,
@@ -281,55 +282,16 @@ def _title_text_primitives(
 
 
 def _svg_func_code(value: Any) -> str:
-    if value is None:
-        return "~"
-    out = str(value)
-    if not out:
-        return "~"
-    return out[0]
-
+    return normalize_func_code(value)
 
 def _svg_text_direction(value: Any) -> str:
-    if value is None:
-        return "Across"
-
-    key = str(value).strip().lower()
-    aliases = {
-        "across": "Across",
-        "nhlacross": "Across",
-        "down": "Down",
-        "nhldown": "Down",
-    }
-    if key not in aliases:
-        raise ValueError(f"Unsupported TextItem direction: {value!r}")
-    return aliases[key]
-
+    return normalize_text_direction(value)
 
 def _svg_text_real_string(text_value: Any, direction: Any, func_code: Any) -> str:
-    code = _svg_func_code(func_code)
-    normalized_direction = _svg_text_direction(direction)
-    dir_code = "D" if normalized_direction == "Down" else "A"
-    return f"{code}{dir_code}{code}{str(text_value)}"
-
-
-_SVG_TEXT_QUALITY_INDEX = {
-    "high": 0,
-    "nhlhigh": 0,
-    "medium": 1,
-    "nhlmedium": 1,
-    "low": 2,
-    "nhllow": 2,
-    "workstation": 3,
-    "nhlworkstation": 3,
-}
-
+    return text_real_string(text_value, direction=direction, func_code=func_code)
 
 def _svg_text_quality_index(value: Any) -> int:
-    key = str(value).strip().lower()
-    if key not in _SVG_TEXT_QUALITY_INDEX:
-        raise ValueError(f"Unsupported TextItem font quality: {value!r}")
-    return _SVG_TEXT_QUALITY_INDEX[key]
-
+    return text_quality_index(value)
 
 def _svg_non_negative_float(value: Any, default: float) -> float:
     out = _resource_float(value, default)
