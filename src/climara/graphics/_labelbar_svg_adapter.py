@@ -322,6 +322,7 @@ def labelbar_geometry_to_svg_primitives(
     perim_stroke_width: float = 0.5,
     label_func_code: str = "~",
     label_direction: str = "Across",
+    label_font_height: float | None = None,
 ) -> SvgLabelBarPrimitives:
     ndc_polygons = compute_labelbar_box_polygons(geometry)
     polygon_count = len(ndc_polygons)
@@ -384,6 +385,7 @@ def labelbar_geometry_to_svg_primitives(
                 text=text_value,
                 angle=geometry.label_angle,
                 fill=text_fill,
+                font_height=label_font_height,
                 direction=label_direction,
                 real_string=_svg_text_real_string(text_value, label_direction, label_func_code),
                 func_code=label_func_code,
@@ -423,6 +425,7 @@ def labelbar_to_svg_primitives(
 
     label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
     label_direction = _svg_text_direction(resources.get("lbLabelDirection", "Across"))
+    label_font_height = _resource_float(resources.get("lbLabelFontHeightF"), 0.02)
 
     box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
     box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
@@ -464,6 +467,7 @@ def labelbar_to_svg_primitives(
         perim_stroke_width=perim_stroke_width,
         label_func_code=label_func_code,
         label_direction=label_direction,
+        label_font_height=label_font_height,
     )
 
 

@@ -993,7 +993,7 @@ def _render_labelbar(obj, doc, viewport=None):
         _render_svg_text_primitive(
             doc,
             text_item,
-            font_size=font_size,
+            font_size=_svg_text_font_size(text_item, doc, font_size),
             anchor=anchor,
         )
     for line in primitives.lines:
