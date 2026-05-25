@@ -10,6 +10,7 @@ from ._labelbar_semantics import (
     ORIENTATION_HORIZONTAL,
     ORIENTATION_VERTICAL,
     NCL_LABELBAR_DEFAULT_TITLE,
+    TITLE_DIRECTION_DOWN,
     TITLE_POSITION_BOTTOM,
     TITLE_POSITION_LEFT,
     TITLE_POSITION_RIGHT,
@@ -59,6 +60,7 @@ class NdcTextItemSpec:
     x: float
     y: float
     text: str
+    real_string: str
     direction: str
     angle: float
     just: str
@@ -377,6 +379,11 @@ def _func_code(value: Any) -> str:
     return out[0]
 
 
+def _text_item_real_string(text: str, direction: str, func_code: str) -> str:
+    dir_code = "D" if direction == TITLE_DIRECTION_DOWN else "A"
+    return f"{func_code}{dir_code}{func_code}{text}"
+
+
 def _title_text_item_spec(
     obj: Any,
     placement: NdcTextPlacement,
@@ -389,10 +396,13 @@ def _title_text_item_spec(
     if font_height <= 0.0:
         font_height = 0.025
 
+    func_code = _func_code(_pick(obj, "lbTitleFuncCode", "~"))
+
     return NdcTextItemSpec(
         x=placement.x,
         y=placement.y,
         text=placement.text,
+        real_string=_text_item_real_string(placement.text, direction, func_code),
         direction=direction,
         angle=angle,
         just=just,
@@ -403,7 +413,7 @@ def _title_text_item_spec(
         font_thickness=_num(_pick(obj, "lbTitleFontThicknessF", 1.0), 1.0),
         font_quality=_pick(obj, "lbTitleFontQuality", "High"),
         constant_spacing=_non_negative_num(_pick(obj, "lbTitleConstantSpacingF", 0.0), 0.0),
-        func_code=_func_code(_pick(obj, "lbTitleFuncCode", "~")),
+        func_code=func_code,
     )
 
 
