@@ -1,3 +1,5 @@
+from math import inf, nan
+
 from climara.graphics._plotchar_metrics import (
     PlotcharMetricsNotImplementedError,
     build_plotchar_extent_metrics,
@@ -38,25 +40,41 @@ def main():
     almost_equal(request.angle, 315.0)
 
     extents = build_plotchar_extent_metrics(
-        dl=-0.1,
-        dr=0.2,
-        db=-0.05,
-        dt=0.1,
+        dl=0.1,
+        dr=0.3,
+        db=0.05,
+        dt=0.15,
     )
 
-    almost_equal(extents.dl, -0.1)
-    almost_equal(extents.dr, 0.2)
-    almost_equal(extents.db, -0.05)
-    almost_equal(extents.dt, 0.1)
-    almost_equal(extents.width, 0.3)
-    almost_equal(extents.height, 0.15)
+    almost_equal(extents.dl, 0.1)
+    almost_equal(extents.dr, 0.3)
+    almost_equal(extents.db, 0.05)
+    almost_equal(extents.dt, 0.15)
+    almost_equal(extents.width, 0.4)
+    almost_equal(extents.height, 0.2)
 
-    try:
-        build_plotchar_extent_metrics(dl=0.2, dr=-0.1, db=0.0, dt=0.1)
-    except ValueError as exc:
-        assert "dr >= dl" in str(exc)
-    else:
-        raise AssertionError("invalid Plotchar horizontal extents should fail")
+    signed_extents = build_plotchar_extent_metrics(
+        dl=0.2,
+        dr=-0.1,
+        db=0.3,
+        dt=-0.1,
+    )
+
+    almost_equal(signed_extents.width, 0.1)
+    almost_equal(signed_extents.height, 0.2)
+
+    for bad_value in (nan, inf, -inf):
+        try:
+            build_plotchar_extent_metrics(
+                dl=bad_value,
+                dr=0.1,
+                db=0.1,
+                dt=0.1,
+            )
+        except ValueError as exc:
+            assert "must be finite" in str(exc)
+        else:
+            raise AssertionError("non-finite Plotchar metric should fail")
 
     try:
         compute_plotchar_extent_metrics(request)

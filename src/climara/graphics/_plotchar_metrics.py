@@ -20,11 +20,11 @@ class PlotcharExtentMetrics:
 
     @property
     def width(self) -> float:
-        return self.dr - self.dl
+        return self.dl + self.dr
 
     @property
     def height(self) -> float:
-        return self.dt - self.db
+        return self.db + self.dt
 
 
 @dataclass(frozen=True)
@@ -77,11 +77,6 @@ def build_plotchar_extent_metrics(
     for name, value in values.items():
         if not isfinite(value):
             raise ValueError(f"Plotchar extent metric {name} must be finite")
-
-    if values["dr"] < values["dl"]:
-        raise ValueError("Plotchar extent metrics require dr >= dl")
-    if values["dt"] < values["db"]:
-        raise ValueError("Plotchar extent metrics require dt >= db")
 
     return PlotcharExtentMetrics(**values)
 
