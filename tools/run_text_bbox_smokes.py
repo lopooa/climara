@@ -31,6 +31,8 @@ SMOKES = [
     "tools/smoke_labelbar_bbox_semantics_from_plotchar_metrics.py",
     "tools/smoke_labelbar_bbox_semantics_boundary.py",
     "tools/smoke_labelbar_adjust_bridge_from_supplied_metrics.py",
+    "tools/smoke_labelbar_adjust_box_semantics.py",
+    "tools/smoke_labelbar_adjust_box_semantics_not_used.py",
     "tools/smoke_labelbar_adjust_bridge_not_used.py",
     "tools/smoke_labelbar_bbox_semantics_not_used.py",
     "tools/smoke_labelbar_text_bbox_builder_not_used.py",
