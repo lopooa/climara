@@ -143,6 +143,63 @@ def compute_multitext_bbox(request: MultiTextBBoxRequest) -> TextBBox:
     )
 
 
+def build_text_bbox(
+    *,
+    l: float,
+    r: float,
+    b: float,
+    t: float,
+    coordinate_space: str | None = TEXT_BBOX_COORD_NDC,
+) -> TextBBox:
+    normalized = _normalize_coordinate_space(coordinate_space)
+
+    left = float(l)
+    right = float(r)
+    bottom = float(b)
+    top = float(t)
+
+    if right < left:
+        raise ValueError("TextBBox requires r >= l")
+    if top < bottom:
+        raise ValueError("TextBBox requires t >= b")
+
+    return TextBBox(
+        l=left,
+        r=right,
+        b=bottom,
+        t=top,
+        coordinate_space=normalized,
+    )
+
+
+def union_text_bboxes(
+    boxes: Iterable[TextBBox],
+    *,
+    coordinate_space: str | None = None,
+) -> TextBBox:
+    box_values = tuple(boxes)
+
+    if not box_values:
+        raise ValueError("Cannot union an empty TextBBox sequence")
+
+    if coordinate_space is None:
+        normalized = _normalize_coordinate_space(box_values[0].coordinate_space)
+    else:
+        normalized = _normalize_coordinate_space(coordinate_space)
+
+    for box in box_values:
+        if _normalize_coordinate_space(box.coordinate_space) != normalized:
+            raise ValueError("All TextBBox objects must use the same coordinate space")
+
+    return TextBBox(
+        l=min(box.l for box in box_values),
+        r=max(box.r for box in box_values),
+        b=min(box.b for box in box_values),
+        t=max(box.t for box in box_values),
+        coordinate_space=normalized,
+    )
+
+
 __all__ = [
     "TEXT_BBOX_COORD_NDC",
     "MultiTextBBoxRequest",
@@ -151,8 +208,10 @@ __all__ = [
     "TextItemBBoxRequest",
     "build_multitext_bbox_request",
     "build_multitext_bbox_request_from_semantics",
+    "build_text_bbox",
     "build_text_item_bbox_request",
     "compute_multitext_bbox",
     "compute_text_item_bbox",
     "has_text_bbox_engine",
+    "union_text_bboxes",
 ]
