@@ -20,6 +20,7 @@ from ._labelbar_semantics import (
     normalize_label_alignment,
     normalize_label_stride,
     normalize_orientation,
+    normalize_title_direction,
     normalize_title_position,
 )
 
@@ -54,6 +55,24 @@ class NdcTextPlacement:
 
 
 @dataclass(frozen=True)
+class NdcTextItemSpec:
+    x: float
+    y: float
+    text: str
+    direction: str
+    angle: float
+    just: str
+    font: Any
+    font_color: Any
+    font_height: float
+    font_aspect: float
+    font_thickness: float
+    font_quality: Any
+    constant_spacing: float
+    func_code: str
+
+
+@dataclass(frozen=True)
 class LabelBarGeometry:
     perim: NdcRect
     adj_perim: NdcRect
@@ -64,6 +83,8 @@ class LabelBarGeometry:
     title_text_position: NdcTextPlacement | None
     title_angle: float
     title_just: str
+    title_direction: str
+    title_text_item: NdcTextItemSpec | None
     bar: NdcRect
     labels_area: NdcRect
     adj_bar: NdcRect
@@ -338,6 +359,52 @@ def _resolve_title_string(obj: Any, title_on: bool) -> str:
         return str(getattr(obj, "name", "labelbar"))
 
     return value
+
+
+def _non_negative_num(value: Any, default: float) -> float:
+    out = _num(value, default)
+    if out < 0.0:
+        return 0.0
+    return out
+
+
+def _func_code(value: Any) -> str:
+    if value is None:
+        return "~"
+    out = str(value)
+    if not out:
+        return "~"
+    return out[0]
+
+
+def _title_text_item_spec(
+    obj: Any,
+    placement: NdcTextPlacement,
+    *,
+    direction: str,
+    angle: float,
+    just: str,
+) -> NdcTextItemSpec:
+    font_height = _num(_pick(obj, "lbTitleFontHeightF", 0.025), 0.025)
+    if font_height <= 0.0:
+        font_height = 0.025
+
+    return NdcTextItemSpec(
+        x=placement.x,
+        y=placement.y,
+        text=placement.text,
+        direction=direction,
+        angle=angle,
+        just=just,
+        font=_pick(obj, "lbTitleFont", 21),
+        font_color=_pick(obj, "lbTitleFontColor", "Foreground"),
+        font_height=font_height,
+        font_aspect=_num(_pick(obj, "lbTitleFontAspectF", 1.3125), 1.3125),
+        font_thickness=_num(_pick(obj, "lbTitleFontThicknessF", 1.0), 1.0),
+        font_quality=_pick(obj, "lbTitleFontQuality", "High"),
+        constant_spacing=_non_negative_num(_pick(obj, "lbTitleConstantSpacingF", 0.0), 0.0),
+        func_code=_func_code(_pick(obj, "lbTitleFuncCode", "~")),
+    )
 
 
 
@@ -688,6 +755,10 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
         title_angle = title_angle + 360.0
 
     title_just = _normalize_title_just(_pick(obj, "lbTitleJust", "CenterCenter"))
+    title_direction = normalize_title_direction(
+        _pick(obj, "lbTitleDirection", getattr(obj, "title_direction", None)),
+        title_position,
+    )
 
     if title_on:
         title_x, title_y = _title_text_xy(title_area, title_just)
@@ -696,8 +767,16 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
             y=title_y,
             text=_resolve_title_string(obj, title_on),
         )
+        title_text_item = _title_text_item_spec(
+            obj,
+            title_text_position,
+            direction=title_direction,
+            angle=title_angle,
+            just=title_just,
+        )
     else:
         title_text_position = None
+        title_text_item = None
 
     return LabelBarGeometry(
         perim=perim,
@@ -709,6 +788,8 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
         title_text_position=title_text_position,
         title_angle=title_angle,
         title_just=title_just,
+        title_direction=title_direction,
+        title_text_item=title_text_item,
         bar=bar,
         labels_area=labels_area,
         adj_bar=adj_bar,

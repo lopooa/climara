@@ -364,6 +364,8 @@ def labelbar_to_svg_primitives(
         title_text_position=geometry.title_text_position,
         title_angle=geometry.title_angle,
         title_just=geometry.title_just,
+        title_direction=geometry.title_direction,
+        title_text_item=geometry.title_text_item,
         bar=geometry.bar,
         labels_area=geometry.labels_area,
         adj_bar=geometry.adj_bar,
