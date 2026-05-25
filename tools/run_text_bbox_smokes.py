@@ -8,6 +8,7 @@ SMOKES = [
     "tools/smoke_ncl_text_bbox_source_map_doc.py",
     "tools/smoke_ncl_source_requirements.py",
     "tools/smoke_text_bbox_dependency_gate.py",
+    "tools/smoke_text_bbox_implementation_preflight.py",
     "tools/smoke_ncl_source_availability_report.py",
     "tools/smoke_no_text_bbox_heuristics.py",
     "tools/smoke_plotchar_metrics_guard.py",
