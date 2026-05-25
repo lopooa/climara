@@ -4,6 +4,9 @@ from pathlib import Path
 
 
 SMOKES = [
+    "tools/smoke_text_semantics.py",
+    "tools/smoke_text_semantics_labelbar_bridge.py",
+    "tools/smoke_text_semantics_shared_delegation.py",
     "tools/smoke_labelbar_title_object_semantics.py",
     "tools/smoke_labelbar_title_geometry_semantics.py",
     "tools/smoke_labelbar_title_text_geometry_semantics.py",
@@ -17,6 +20,7 @@ SMOKES = [
     "tools/smoke_svg_labelbar_title_down_direction_guard.py",
     "tools/smoke_svg_labelbar_title_plotchar_guard.py",
     "tools/smoke_svg_labelbar_draw_order.py",
+    "tools/smoke_labelbar_label_shared_text_semantics.py",
     "tools/smoke_labelbar_label_plotchar_guard.py",
     "tools/smoke_labelbar_label_direction_guard.py",
     "tools/smoke_labelbar_label_textitem_real_string_semantics.py",
