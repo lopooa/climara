@@ -944,6 +944,12 @@ def render_object(
 ) -> SvgDocument:
     """Render one object and its children into an SVG document."""
 
+    if not isinstance(doc, SvgDocument):
+        raise TypeError(
+            "render_object expects a SvgDocument as its second argument; "
+            "use render_svg(..., path=...) or save_svg(...) to write an SVG file."
+        )
+
     name = _class_name(obj)
 
     if "contourplot" in name:
