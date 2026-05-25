@@ -41,6 +41,7 @@ SMOKES = [
     "tools/smoke_labelbar_adjust_bridge_not_used.py",
     "tools/smoke_labelbar_bbox_semantics_not_used.py",
     "tools/smoke_labelbar_text_bbox_builder_not_used.py",
+    "tools/smoke_labelbar_adjust_geometry_execution.py",
     "tools/smoke_labelbar_adjust_geometry_guard.py",
     "tools/smoke_labelbar_adjust_geometry_not_used.py",
 ]

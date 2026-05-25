@@ -46,12 +46,17 @@ def build_labelbar_adjust_request_from_supplied_plotchar_metrics(
     title_bbox = None if text_bboxes.title is None else text_bboxes.title.bbox
     label_bbox = None if text_bboxes.labels is None else text_bboxes.labels.bbox
 
+    resources = getattr(obj, "resources", None)
+    if not isinstance(resources, dict):
+        resources = {}
+
     return LabelBarSuppliedMetricsAdjustRequest(
         text_bboxes=text_bboxes,
         adjust_request=build_labelbar_adjust_geometry_request(
             geometry,
             title_bbox=title_bbox,
             label_bbox=label_bbox,
+            justification=resources.get("lbJustification", "CenterCenter"),
         ),
     )
 
