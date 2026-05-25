@@ -36,6 +36,9 @@ class SvgTextPrimitive:
     just: Any | None = None
     direction: Any | None = None
     font: Any | None = None
+    font_aspect: float | None = None
+    font_thickness: float | None = None
+    constant_spacing: float | None = None
     real_string: str | None = None
     func_code: str | None = None
     font_quality: Any | None = None
@@ -304,6 +307,32 @@ def _svg_text_real_string(text_value: Any, direction: Any, func_code: Any) -> st
     return f"{code}{dir_code}{code}{str(text_value)}"
 
 
+_SVG_TEXT_QUALITY_INDEX = {
+    "high": 0,
+    "nhlhigh": 0,
+    "medium": 1,
+    "nhlmedium": 1,
+    "low": 2,
+    "nhllow": 2,
+    "workstation": 3,
+    "nhlworkstation": 3,
+}
+
+
+def _svg_text_quality_index(value: Any) -> int:
+    key = str(value).strip().lower()
+    if key not in _SVG_TEXT_QUALITY_INDEX:
+        raise ValueError(f"Unsupported TextItem font quality: {value!r}")
+    return _SVG_TEXT_QUALITY_INDEX[key]
+
+
+def _svg_non_negative_float(value: Any, default: float) -> float:
+    out = _resource_float(value, default)
+    if out < 0.0:
+        return 0.0
+    return out
+
+
 def labelbar_geometry_to_svg_primitives(
     geometry: LabelBarGeometry,
     svg_width: float,
@@ -323,6 +352,13 @@ def labelbar_geometry_to_svg_primitives(
     label_func_code: str = "~",
     label_direction: str = "Across",
     label_font_height: float | None = None,
+    label_just: Any = "CenterCenter",
+    label_font: Any = 21,
+    label_font_aspect: float = 1.3125,
+    label_font_thickness: float = 1.0,
+    label_font_quality: Any = "High",
+    label_quality_index: int = 0,
+    label_constant_spacing: float = 0.0,
 ) -> SvgLabelBarPrimitives:
     ndc_polygons = compute_labelbar_box_polygons(geometry)
     polygon_count = len(ndc_polygons)
@@ -386,9 +422,16 @@ def labelbar_geometry_to_svg_primitives(
                 angle=geometry.label_angle,
                 fill=text_fill,
                 font_height=label_font_height,
+                just=label_just,
                 direction=label_direction,
+                font=label_font,
+                font_aspect=label_font_aspect,
+                font_thickness=label_font_thickness,
+                constant_spacing=label_constant_spacing,
                 real_string=_svg_text_real_string(text_value, label_direction, label_func_code),
                 func_code=label_func_code,
+                font_quality=label_font_quality,
+                quality_index=label_quality_index,
             )
         )
 
@@ -426,6 +469,16 @@ def labelbar_to_svg_primitives(
     label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
     label_direction = _svg_text_direction(resources.get("lbLabelDirection", "Across"))
     label_font_height = _resource_float(resources.get("lbLabelFontHeightF"), 0.02)
+    label_just = resources.get("lbLabelJust", "CenterCenter")
+    label_font = resources.get("lbLabelFont", 21)
+    label_font_aspect = _resource_float(resources.get("lbLabelFontAspectF"), 1.3125)
+    label_font_thickness = _resource_float(resources.get("lbLabelFontThicknessF"), 1.0)
+    label_font_quality = resources.get("lbLabelFontQuality", "High")
+    label_quality_index = _svg_text_quality_index(label_font_quality)
+    label_constant_spacing = _svg_non_negative_float(
+        resources.get("lbLabelConstantSpacingF"),
+        0.0,
+    )
 
     box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
     box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
@@ -468,6 +521,13 @@ def labelbar_to_svg_primitives(
         label_func_code=label_func_code,
         label_direction=label_direction,
         label_font_height=label_font_height,
+        label_just=label_just,
+        label_font=label_font,
+        label_font_aspect=label_font_aspect,
+        label_font_thickness=label_font_thickness,
+        label_font_quality=label_font_quality,
+        label_quality_index=label_quality_index,
+        label_constant_spacing=label_constant_spacing,
     )
 
 
