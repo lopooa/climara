@@ -20,6 +20,7 @@ DONE = [
     "TextItem bbox semantics from supplied Plotchar metrics",
     "MultiText bbox semantics from supplied child Plotchar metrics",
     "LabelBar Plotchar metrics request builder",
+    "LabelBar text bbox semantics from supplied Plotchar metrics",
     "guarded LabelBar AdjustGeometry boundary",
 ]
 
@@ -32,7 +33,7 @@ NOT_DONE = [
     "NCL font metrics",
     "LabelBar AutoManage",
     "LabelBar AdjustGeometry implementation",
-    "Text bbox feedback into LabelBar geometry",
+    "Text bbox feedback into LabelBar geometry / AdjustGeometry",
 ]
 
 

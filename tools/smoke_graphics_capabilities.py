@@ -17,6 +17,7 @@ def main():
     assert caps.text_bbox_from_plotchar_metrics is True
     assert caps.multitext_bbox_from_plotchar_metrics is True
     assert caps.labelbar_plotchar_metrics_requests is True
+    assert caps.labelbar_bbox_from_plotchar_metrics is True
 
     assert caps.text_bbox_engine is False
     assert caps.plotchar_metrics_engine is False

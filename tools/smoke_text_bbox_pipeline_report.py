@@ -25,6 +25,9 @@ def main():
 
     assert "title_plotchar_metrics_request" in out
     assert "label_plotchar_metrics_request_count:" in out
+    assert "LabelBar text bbox semantics from supplied title/label Plotchar metrics are available." in out
+    assert "MultiText bbox semantics from supplied child Plotchar metrics are available." in out
+    assert "TextItem bbox semantics from supplied Plotchar metrics are available." in out
     assert "Plotchar DL / DR / DB / DT metrics are still guarded." in out
     assert "LabelBar AdjustGeometry / AutoManage is still guarded." in out
 
