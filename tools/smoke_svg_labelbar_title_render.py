@@ -48,6 +48,24 @@ def main():
     assert "NOTHING" not in svg
     assert svg.index("my_labelbar") < svg.index(">A<")
 
+    labels_off_title_on = HluLabelBar(
+        name="labels_off_title_on_labelbar",
+        colors=["#2166ac", "#67a9cf", "#fddbc7", "#b2182b"],
+        labels=["A", "B", "C", "D"],
+        resources={
+            "lbTitleString": "Title only",
+            "lbLabelsOn": False,
+        },
+    )
+
+    svg = _render_to_text(labels_off_title_on, "svg_labelbar_title_labels_off_render.svg")
+
+    assert "Title only" in svg
+    assert ">A<" not in svg
+    assert ">B<" not in svg
+    assert ">C<" not in svg
+    assert ">D<" not in svg
+
     title_off = HluLabelBar(
         name="hidden_title_labelbar",
         colors=["#2166ac", "#67a9cf", "#fddbc7", "#b2182b"],
