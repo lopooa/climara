@@ -8,36 +8,47 @@ DONE = [
     "no Matplotlib runtime in src/climara",
     "no Cartopy runtime dependency in src/climara / pyproject check",
     "SVG backend path",
+
     "shared TextItem semantics helper",
     "shared MultiText semantics helper",
     "LabelBar title TextItem semantics",
     "LabelBar label MultiText/TextItem semantics",
+
     "TextBBox request / coordinate-space / union contracts",
     "MultiText child bbox aggregation contract",
     "LabelBar text bbox request builder",
+
     "Plotchar metrics request boundary",
     "TextBBox request to Plotchar metrics bridge",
+    "LabelBar Plotchar metrics request builder",
+
     "TextItem bbox semantics from supplied Plotchar metrics",
     "MultiText bbox semantics from supplied child Plotchar metrics",
-    "LabelBar Plotchar metrics request builder",
-    "LabelBar text bbox semantics from supplied Plotchar metrics",
+    "LabelBar text bbox semantics from supplied title/label Plotchar metrics",
+
     "LabelBar AdjustGeometry request bridge from supplied text bboxes",
     "LabelBar AdjustGeometry supplied-bbox box semantics",
-    "guarded LabelBar AdjustGeometry boundary",
+    "LabelBar AdjustGeometry perimeter / justification semantics from supplied bboxes",
+    "LabelBar AdjustGeometry write-back semantics from supplied bboxes",
+    "LabelBar AdjustGeometry supplied-bbox execution result",
+    "LabelBar AdjustGeometry materialized snapshot",
+    "LabelBar AdjustGeometry applied LabelBarGeometry snapshot",
+    "LabelBar supplied-metrics AdjustGeometry pipeline",
+
+    "explicit adjusted LabelBar SVG primitive adapter",
+    "explicit adjusted LabelBar SVG file export",
 ]
 
 NOT_DONE = [
-    "TextItem bbox engine using live Plotchar metrics",
-    "MultiText bbox engine using live child TextItem bbox results",
     "NCL Plotchar parser",
     "NCL Plotchar DL / DR / DB / DT metrics engine",
-    "NhlDOWN / Down visual text rendering",
+    "TextItem bbox engine using live Plotchar metrics",
+    "MultiText bbox engine using live child TextItem bbox results",
     "NCL font metrics",
-    "LabelBar AutoManage",
-    "LabelBar AdjustGeometry implementation",
-    "LabelBar AdjustGeometry execution from supplied text bboxes",
-    "LabelBar AdjustGeometry write-back into LabelBarGeometry / child objects",
-    "Text bbox feedback into LabelBar geometry / AdjustGeometry",
+    "NhlDOWN / Down visual text rendering",
+    "full LabelBar AutoManage parity",
+    "default renderer integration for adjusted LabelBar geometry",
+    "default layout integration for adjusted LabelBar geometry",
 ]
 
 
@@ -71,6 +82,8 @@ def main():
     print(f"text_bbox_engine: {has_text_bbox_engine()}")
     print(f"plotchar_metrics_engine: {has_plotchar_metrics_engine()}")
     print(f"labelbar_adjust_geometry_engine: {has_labelbar_adjust_geometry_engine()}")
+    print("Note: labelbar_adjust_geometry_engine=False means no live/default engine.")
+    print("The supplied-bbox AdjustGeometry execution path is explicit and opt-in.")
 
     print()
     print("Recommended checks")

@@ -13,29 +13,32 @@ def main():
     out = result.stdout
 
     assert "climara graphics status" in out
-    assert "no Matplotlib runtime" in out
-    assert "shared TextItem semantics helper" in out
-    assert "LabelBar text bbox request builder" in out
-    assert "Plotchar metrics request boundary" in out
+
     assert "TextItem bbox semantics from supplied Plotchar metrics" in out
     assert "MultiText bbox semantics from supplied child Plotchar metrics" in out
-    assert "LabelBar Plotchar metrics request builder" in out
-    assert "LabelBar text bbox semantics from supplied Plotchar metrics" in out
+    assert "LabelBar text bbox semantics from supplied title/label Plotchar metrics" in out
+
     assert "LabelBar AdjustGeometry request bridge from supplied text bboxes" in out
     assert "LabelBar AdjustGeometry supplied-bbox box semantics" in out
-    assert "LabelBar AdjustGeometry write-back into LabelBarGeometry / child objects" in out
-    assert "LabelBar AdjustGeometry execution from supplied text bboxes" in out
+    assert "LabelBar AdjustGeometry perimeter / justification semantics from supplied bboxes" in out
+    assert "LabelBar AdjustGeometry write-back semantics from supplied bboxes" in out
+    assert "LabelBar AdjustGeometry supplied-bbox execution result" in out
+    assert "LabelBar AdjustGeometry materialized snapshot" in out
+    assert "LabelBar AdjustGeometry applied LabelBarGeometry snapshot" in out
+    assert "LabelBar supplied-metrics AdjustGeometry pipeline" in out
 
-    assert "TextItem bbox engine using live Plotchar metrics" in out
+    assert "explicit adjusted LabelBar SVG primitive adapter" in out
+    assert "explicit adjusted LabelBar SVG file export" in out
+
     assert "NCL Plotchar DL / DR / DB / DT metrics engine" in out
-    assert "LabelBar AdjustGeometry implementation" in out
-    assert "Text bbox feedback into LabelBar geometry / AdjustGeometry" in out
+    assert "TextItem bbox engine using live Plotchar metrics" in out
+    assert "MultiText bbox engine using live child TextItem bbox results" in out
+    assert "default renderer integration for adjusted LabelBar geometry" in out
 
     assert "text_bbox_engine: False" in out
     assert "plotchar_metrics_engine: False" in out
     assert "labelbar_adjust_geometry_engine: False" in out
-
-    assert "PYTHONPATH=src python tools/run_core_smokes.py" in out
+    assert "supplied-bbox AdjustGeometry execution path is explicit and opt-in" in out
 
     print("✅ graphics status report smoke passed")
 

@@ -12,10 +12,19 @@ def main():
 
     out = result.stdout
 
-    assert "climara TextBBox / Plotchar pipeline status" in out
+    assert "climara TextBBox / Plotchar / LabelBar pipeline status" in out
+
     assert "text_bbox_engine: False" in out
     assert "plotchar_metrics_engine: False" in out
     assert "labelbar_adjust_geometry_engine: False" in out
+
+    assert "text_bbox_from_supplied_plotchar_metrics: True" in out
+    assert "multitext_bbox_from_supplied_plotchar_metrics: True" in out
+    assert "labelbar_bbox_from_supplied_plotchar_metrics: True" in out
+    assert "labelbar_adjust_execution_from_supplied_bboxes: True" in out
+    assert "labelbar_adjust_pipeline_from_supplied_metrics: True" in out
+    assert "explicit_adjusted_labelbar_svg_export: True" in out
+    assert "default_renderer_uses_adjusted_labelbar: False" in out
 
     assert "title_text_bbox_request" in out
     assert "real_string: @A@Pipeline title" in out
@@ -25,13 +34,16 @@ def main():
 
     assert "title_plotchar_metrics_request" in out
     assert "label_plotchar_metrics_request_count:" in out
-    assert "LabelBar text bbox semantics from supplied title/label Plotchar metrics are available." in out
-    assert "LabelBar AdjustGeometry requests from supplied text bboxes are available." in out
-    assert "LabelBar AdjustGeometry supplied-bbox box semantics are available." in out
-    assert "MultiText bbox semantics from supplied child Plotchar metrics are available." in out
-    assert "TextItem bbox semantics from supplied Plotchar metrics are available." in out
-    assert "Plotchar DL / DR / DB / DT metrics are still guarded." in out
-    assert "LabelBar AdjustGeometry / AutoManage is still guarded." in out
+
+    assert "LabelBar AdjustGeometry supplied-bbox execution is available." in out
+    assert "LabelBar AdjustGeometry materialized snapshots are available." in out
+    assert "Adjusted LabelBarGeometry snapshots are available." in out
+    assert "Explicit adjusted LabelBar SVG primitive adapter is available." in out
+    assert "Explicit adjusted LabelBar SVG export is available." in out
+
+    assert "Plotchar DL / DR / DB / DT live metrics are still guarded." in out
+    assert "TextItem / MultiText live bbox engines are still guarded." in out
+    assert "Default renderer does not use adjusted LabelBar geometry." in out
 
     print("✅ TextBBox pipeline report smoke passed")
 

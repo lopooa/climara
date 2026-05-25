@@ -1,3 +1,4 @@
+from climara.graphics._capabilities import graphics_capabilities
 from climara.graphics._labelbar_adjust import has_labelbar_adjust_geometry_engine
 from climara.graphics._labelbar_object import HluLabelBar
 from climara.graphics._labelbar_plotchar_metrics import (
@@ -58,9 +59,10 @@ def main():
 
     text_requests = build_labelbar_text_bbox_requests(labelbar)
     plotchar_requests = build_labelbar_plotchar_metrics_requests(labelbar)
+    caps = graphics_capabilities()
 
-    print("climara TextBBox / Plotchar pipeline status")
-    print("=" * 46)
+    print("climara TextBBox / Plotchar / LabelBar pipeline status")
+    print("=" * 58)
     print()
 
     print("Engine flags")
@@ -68,6 +70,17 @@ def main():
     print(f"text_bbox_engine: {has_text_bbox_engine()}")
     print(f"plotchar_metrics_engine: {has_plotchar_metrics_engine()}")
     print(f"labelbar_adjust_geometry_engine: {has_labelbar_adjust_geometry_engine()}")
+    print()
+
+    print("Capability highlights")
+    print("-" * 21)
+    print(f"text_bbox_from_supplied_plotchar_metrics: {caps.text_bbox_from_supplied_plotchar_metrics}")
+    print(f"multitext_bbox_from_supplied_plotchar_metrics: {caps.multitext_bbox_from_supplied_plotchar_metrics}")
+    print(f"labelbar_bbox_from_supplied_plotchar_metrics: {caps.labelbar_bbox_from_supplied_plotchar_metrics}")
+    print(f"labelbar_adjust_execution_from_supplied_bboxes: {caps.labelbar_adjust_execution_from_supplied_bboxes}")
+    print(f"labelbar_adjust_pipeline_from_supplied_metrics: {caps.labelbar_adjust_pipeline_from_supplied_metrics}")
+    print(f"explicit_adjusted_labelbar_svg_export: {caps.explicit_adjusted_labelbar_svg_export}")
+    print(f"default_renderer_uses_adjusted_labelbar: {caps.default_renderer_uses_adjusted_labelbar}")
     print()
 
     print("LabelBar TextBBox requests")
@@ -89,18 +102,27 @@ def main():
         )
 
     print()
-    print("Current boundary")
-    print("-" * 16)
-    print("TextBBox requests are available.")
-    print("TextItem bbox semantics from supplied Plotchar metrics are available.")
-    print("MultiText bbox semantics from supplied child Plotchar metrics are available.")
-    print("LabelBar text bbox semantics from supplied title/label Plotchar metrics are available.")
-    print("LabelBar AdjustGeometry requests from supplied text bboxes are available.")
-    print("LabelBar AdjustGeometry supplied-bbox box semantics are available.")
-    print("Plotchar metrics requests are available.")
-    print("Plotchar DL / DR / DB / DT metrics are still guarded.")
-    print("TextItem / MultiText bbox engines are still guarded.")
-    print("LabelBar AdjustGeometry / AutoManage is still guarded.")
+    print("Available explicit pipeline")
+    print("-" * 27)
+    print("1. TextBBox requests are available.")
+    print("2. Plotchar metrics requests are available.")
+    print("3. TextItem bbox semantics from supplied Plotchar metrics are available.")
+    print("4. MultiText bbox semantics from supplied child Plotchar metrics are available.")
+    print("5. LabelBar text bbox semantics from supplied title/label Plotchar metrics are available.")
+    print("6. LabelBar AdjustGeometry requests from supplied text bboxes are available.")
+    print("7. LabelBar AdjustGeometry supplied-bbox execution is available.")
+    print("8. LabelBar AdjustGeometry materialized snapshots are available.")
+    print("9. Adjusted LabelBarGeometry snapshots are available.")
+    print("10. Explicit adjusted LabelBar SVG primitive adapter is available.")
+    print("11. Explicit adjusted LabelBar SVG export is available.")
+
+    print()
+    print("Current guarded boundary")
+    print("-" * 24)
+    print("Plotchar DL / DR / DB / DT live metrics are still guarded.")
+    print("TextItem / MultiText live bbox engines are still guarded.")
+    print("Default renderer does not use adjusted LabelBar geometry.")
+    print("Default layout does not use adjusted LabelBar geometry.")
 
 
 if __name__ == "__main__":
