@@ -70,6 +70,7 @@ class NdcTextItemSpec:
     font_aspect: float
     font_thickness: float
     font_quality: Any
+    quality_index: int
     constant_spacing: float
     func_code: str
 
@@ -384,6 +385,25 @@ def _text_item_real_string(text: str, direction: str, func_code: str) -> str:
     return f"{func_code}{dir_code}{func_code}{text}"
 
 
+_TEXT_QUALITY_INDEX = {
+    "high": 0,
+    "nhlhigh": 0,
+    "medium": 1,
+    "nhlmedium": 1,
+    "low": 2,
+    "nhllow": 2,
+    "workstation": 3,
+    "nhlworkstation": 3,
+}
+
+
+def _text_quality_index(value: Any) -> int:
+    key = _norm_key(value)
+    if key not in _TEXT_QUALITY_INDEX:
+        raise ValueError(f"Unsupported TextItem font quality: {value!r}")
+    return _TEXT_QUALITY_INDEX[key]
+
+
 def _title_text_item_spec(
     obj: Any,
     placement: NdcTextPlacement,
@@ -397,6 +417,7 @@ def _title_text_item_spec(
         font_height = 0.025
 
     func_code = _func_code(_pick(obj, "lbTitleFuncCode", "~"))
+    font_quality = _pick(obj, "lbTitleFontQuality", "High")
 
     return NdcTextItemSpec(
         x=placement.x,
@@ -411,7 +432,8 @@ def _title_text_item_spec(
         font_height=font_height,
         font_aspect=_num(_pick(obj, "lbTitleFontAspectF", 1.3125), 1.3125),
         font_thickness=_num(_pick(obj, "lbTitleFontThicknessF", 1.0), 1.0),
-        font_quality=_pick(obj, "lbTitleFontQuality", "High"),
+        font_quality=font_quality,
+        quality_index=_text_quality_index(font_quality),
         constant_spacing=_non_negative_num(_pick(obj, "lbTitleConstantSpacingF", 0.0), 0.0),
         func_code=func_code,
     )

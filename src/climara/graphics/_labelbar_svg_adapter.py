@@ -38,6 +38,8 @@ class SvgTextPrimitive:
     font: Any | None = None
     real_string: str | None = None
     func_code: str | None = None
+    font_quality: Any | None = None
+    quality_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -264,6 +266,8 @@ def _title_text_primitives(
             font=item.font,
             real_string=item.real_string,
             func_code=item.func_code,
+            font_quality=item.font_quality,
+            quality_index=item.quality_index,
         ),
     )
 
