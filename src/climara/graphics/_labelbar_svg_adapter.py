@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ._multitext_semantics import build_multitext_semantics
 from ._text_semantics import build_text_item_semantics
 from ._text_semantics import normalize_func_code, normalize_text_direction, text_quality_index, text_real_string
 
@@ -377,25 +378,24 @@ def labelbar_geometry_to_svg_primitives(
     label_direction = _svg_text_direction(label_direction)
     label_func_code = _svg_func_code(label_func_code)
 
-    text_primitives: list[SvgTextPrimitive] = []
-    for item in geometry.label_text_positions:
-        text_value = str(item.text)
-        point = ndc_to_svg_point(item.x, item.y, svg_width, svg_height)
+    label_multitext = build_multitext_semantics(
+        (str(item.text) for item in geometry.label_text_positions),
+        direction=label_direction,
+        func_code=label_func_code,
+        just=label_just,
+        angle=geometry.label_angle,
+        font=label_font,
+        font_color=text_fill,
+        font_height=label_font_height,
+        font_aspect=label_font_aspect,
+        font_thickness=label_font_thickness,
+        font_quality=label_font_quality,
+        constant_spacing=label_constant_spacing,
+    )
 
-        semantics = build_text_item_semantics(
-            text_value,
-            direction=label_direction,
-            func_code=label_func_code,
-            just=label_just,
-            angle=geometry.label_angle,
-            font=label_font,
-            font_color=text_fill,
-            font_height=label_font_height,
-            font_aspect=label_font_aspect,
-            font_thickness=label_font_thickness,
-            font_quality=label_font_quality,
-            constant_spacing=label_constant_spacing,
-        )
+    text_primitives: list[SvgTextPrimitive] = []
+    for item, semantics in zip(geometry.label_text_positions, label_multitext.items):
+        point = ndc_to_svg_point(item.x, item.y, svg_width, svg_height)
 
         text_primitives.append(
             SvgTextPrimitive(
