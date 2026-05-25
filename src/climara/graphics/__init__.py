@@ -177,6 +177,19 @@ _EXPORTS = {
         "build_labelbar_adjust_geometry_request",
         "has_labelbar_adjust_geometry_engine",
     ],
+    "._plotchar_metrics_provider": [
+        "PlotcharMetricsProviderError",
+        "StaticPlotcharMetricsProvider",
+        "build_static_plotchar_metrics_provider",
+        "resolve_plotchar_metrics_from_provider",
+    ],
+    "._labelbar_plotchar_metrics_provider": [
+        "build_labelbar_adjust_pipeline_from_plotchar_metrics_provider",
+        "build_labelbar_plotchar_metrics_bundle_from_provider",
+        "compute_labelbar_adjusted_geometry_from_plotchar_metrics_provider",
+        "render_adjusted_labelbar_svg_from_plotchar_metrics_provider",
+        "save_adjusted_labelbar_svg_from_plotchar_metrics_provider",
+    ],
     "._render_svg": [
         "SvgDocument",
         "render_object",
