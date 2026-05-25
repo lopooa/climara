@@ -17,9 +17,10 @@ def main():
     assert "shared TextItem semantics helper" in out
     assert "LabelBar text bbox request builder" in out
     assert "Plotchar metrics request boundary" in out
+    assert "TextItem bbox semantics from supplied Plotchar metrics" in out
     assert "LabelBar Plotchar metrics request builder" in out
 
-    assert "TextItem bbox engine" in out
+    assert "TextItem bbox engine using live Plotchar metrics" in out
     assert "NCL Plotchar DL / DR / DB / DT metrics engine" in out
     assert "LabelBar AdjustGeometry implementation" in out
 

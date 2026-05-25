@@ -17,12 +17,13 @@ DONE = [
     "LabelBar text bbox request builder",
     "Plotchar metrics request boundary",
     "TextBBox request to Plotchar metrics bridge",
+    "TextItem bbox semantics from supplied Plotchar metrics",
     "LabelBar Plotchar metrics request builder",
     "guarded LabelBar AdjustGeometry boundary",
 ]
 
 NOT_DONE = [
-    "TextItem bbox engine",
+    "TextItem bbox engine using live Plotchar metrics",
     "MultiText bbox engine",
     "NCL Plotchar parser",
     "NCL Plotchar DL / DR / DB / DT metrics engine",

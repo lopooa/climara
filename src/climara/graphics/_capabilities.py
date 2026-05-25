@@ -19,6 +19,7 @@ class GraphicsCapabilities:
     text_bbox_requests: bool
     labelbar_text_bbox_requests: bool
     plotchar_metrics_requests: bool
+    text_bbox_from_plotchar_metrics: bool
     labelbar_plotchar_metrics_requests: bool
 
     text_bbox_engine: bool
@@ -39,6 +40,7 @@ def graphics_capabilities() -> GraphicsCapabilities:
         text_bbox_requests=True,
         labelbar_text_bbox_requests=True,
         plotchar_metrics_requests=True,
+        text_bbox_from_plotchar_metrics=True,
         labelbar_plotchar_metrics_requests=True,
         text_bbox_engine=has_text_bbox_engine(),
         plotchar_metrics_engine=has_plotchar_metrics_engine(),

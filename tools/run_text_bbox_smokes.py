@@ -14,6 +14,7 @@ SMOKES = [
     "tools/smoke_plotchar_metrics_guard.py",
     "tools/smoke_text_bbox_plotchar_bridge.py",
     "tools/smoke_text_bbox_semantics_from_plotchar_metrics.py",
+    "tools/smoke_text_bbox_semantics_boundary.py",
     "tools/smoke_plotchar_metrics_not_used_by_render_path.py",
     "tools/smoke_labelbar_plotchar_metrics_request_builder.py",
     "tools/smoke_text_bbox_pipeline_report.py",
