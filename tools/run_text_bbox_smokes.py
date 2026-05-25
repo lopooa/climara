@@ -8,6 +8,7 @@ SMOKES = [
     "tools/smoke_ncl_text_bbox_source_map_doc.py",
     "tools/smoke_plotchar_metrics_guard.py",
     "tools/smoke_text_bbox_plotchar_bridge.py",
+    "tools/smoke_plotchar_metrics_not_used_by_render_path.py",
     "tools/smoke_text_bbox_not_used_by_render_path.py",
     "tools/smoke_text_bbox_coordinate_space_contract.py",
     "tools/smoke_text_bbox_union_contract.py",
