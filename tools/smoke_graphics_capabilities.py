@@ -14,6 +14,7 @@ def main():
 
     assert caps.text_bbox_engine is False
     assert caps.labelbar_adjust_geometry_engine is False
+    assert caps.plotchar_metrics_engine is False
     assert caps.plotchar_parser is False
     assert caps.down_text_rendering is False
 
