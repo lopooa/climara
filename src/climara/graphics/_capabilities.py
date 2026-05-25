@@ -24,6 +24,7 @@ class GraphicsCapabilities:
     labelbar_plotchar_metrics_requests: bool
     labelbar_bbox_from_plotchar_metrics: bool
     labelbar_adjust_request_from_supplied_bboxes: bool
+    labelbar_adjust_box_semantics_from_supplied_bboxes: bool
 
     text_bbox_engine: bool
     plotchar_metrics_engine: bool
@@ -48,6 +49,7 @@ def graphics_capabilities() -> GraphicsCapabilities:
         labelbar_plotchar_metrics_requests=True,
         labelbar_bbox_from_plotchar_metrics=True,
         labelbar_adjust_request_from_supplied_bboxes=True,
+        labelbar_adjust_box_semantics_from_supplied_bboxes=True,
         text_bbox_engine=has_text_bbox_engine(),
         plotchar_metrics_engine=has_plotchar_metrics_engine(),
         labelbar_adjust_geometry_engine=has_labelbar_adjust_geometry_engine(),

@@ -22,6 +22,7 @@ DONE = [
     "LabelBar Plotchar metrics request builder",
     "LabelBar text bbox semantics from supplied Plotchar metrics",
     "LabelBar AdjustGeometry request bridge from supplied text bboxes",
+    "LabelBar AdjustGeometry supplied-bbox box semantics",
     "guarded LabelBar AdjustGeometry boundary",
 ]
 
@@ -35,6 +36,7 @@ NOT_DONE = [
     "LabelBar AutoManage",
     "LabelBar AdjustGeometry implementation",
     "LabelBar AdjustGeometry execution from supplied text bboxes",
+    "LabelBar AdjustGeometry write-back into LabelBarGeometry / child objects",
     "Text bbox feedback into LabelBar geometry / AdjustGeometry",
 ]
 

@@ -22,6 +22,8 @@ def main():
     assert "LabelBar Plotchar metrics request builder" in out
     assert "LabelBar text bbox semantics from supplied Plotchar metrics" in out
     assert "LabelBar AdjustGeometry request bridge from supplied text bboxes" in out
+    assert "LabelBar AdjustGeometry supplied-bbox box semantics" in out
+    assert "LabelBar AdjustGeometry write-back into LabelBarGeometry / child objects" in out
     assert "LabelBar AdjustGeometry execution from supplied text bboxes" in out
 
     assert "TextItem bbox engine using live Plotchar metrics" in out

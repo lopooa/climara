@@ -96,6 +96,7 @@ def main():
     print("MultiText bbox semantics from supplied child Plotchar metrics are available.")
     print("LabelBar text bbox semantics from supplied title/label Plotchar metrics are available.")
     print("LabelBar AdjustGeometry requests from supplied text bboxes are available.")
+    print("LabelBar AdjustGeometry supplied-bbox box semantics are available.")
     print("Plotchar metrics requests are available.")
     print("Plotchar DL / DR / DB / DT metrics are still guarded.")
     print("TextItem / MultiText bbox engines are still guarded.")
