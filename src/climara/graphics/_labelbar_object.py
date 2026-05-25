@@ -11,6 +11,7 @@ from ._labelbar_semantics import (
     LABEL_ALIGNMENT_EXTERNAL_EDGES,
     LABEL_ALIGNMENT_INTERIOR_EDGES,
     NCL_LABELBAR_DEFAULTS,
+    NCL_LABELBAR_DEFAULT_TITLE,
     label_alignment_for_end_style,
     label_count_for_alignment,
     label_indices_for_stride,
@@ -19,6 +20,9 @@ from ._labelbar_semantics import (
     normalize_label_alignment,
     normalize_label_stride,
     normalize_orientation,
+    normalize_title_direction,
+    normalize_title_position,
+    resolve_title_on,
     uniform_label_axis_positions,
 )
 
@@ -242,6 +246,21 @@ class HluLabelBar:
         self.perim_on = _resource_bool(merged_resources.get("lbPerimOn", False))
         self.labels_on = _resource_bool(merged_resources.get("lbLabelsOn", True))
 
+        title_string = merged_resources.get("lbTitleString", NCL_LABELBAR_DEFAULT_TITLE)
+        if title_string is None:
+            title_string = NCL_LABELBAR_DEFAULT_TITLE
+
+        self.title_string = str(title_string)
+        self.title_on = resolve_title_on(merged_resources.get("lbTitleOn"), self.title_string)
+        self.title_position = normalize_title_position(merged_resources.get("lbTitlePosition"))
+        self.title_direction = normalize_title_direction(
+            merged_resources.get("lbTitleDirection"),
+            self.title_position,
+        )
+        self.title_extent = float(merged_resources.get("lbTitleExtentF", 0.15))
+        self.title_offset = float(merged_resources.get("lbTitleOffsetF", 0.03))
+        self.title_angle = float(merged_resources.get("lbTitleAngleF", 0.0))
+
         self.label_font_height = float(merged_resources.get("lbLabelFontHeightF", 0.02))
         self.label_offset = float(merged_resources.get("lbLabelOffsetF", 0.1))
         self.box_minor_extent = float(merged_resources.get("lbBoxMinorExtentF", 0.33))
@@ -257,6 +276,13 @@ class HluLabelBar:
         self.resources["lbLabelAlignment"] = self.label_alignment
         self.resources["lbBoxCount"] = self.box_count
         self.resources["lbLabelStride"] = self.label_stride
+        self.resources["lbTitleString"] = self.title_string
+        self.resources["lbTitleOn"] = self.title_on
+        self.resources["lbTitlePosition"] = self.title_position
+        self.resources["lbTitleDirection"] = self.title_direction
+        self.resources["lbTitleExtentF"] = self.title_extent
+        self.resources["lbTitleOffsetF"] = self.title_offset
+        self.resources["lbTitleAngleF"] = self.title_angle
 
     @property
     def x(self) -> float:

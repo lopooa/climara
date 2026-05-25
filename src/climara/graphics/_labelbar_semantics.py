@@ -15,6 +15,35 @@ END_STYLE_EXCLUDE_OUTER_BOXES = "ExcludeOuterBoxes"
 
 BOX_END_CAP_RECTANGLE_ENDS = "RectangleEnds"
 
+
+NCL_LABELBAR_DEFAULT_TITLE = "NOTHING"
+
+TITLE_POSITION_TOP = "Top"
+TITLE_POSITION_BOTTOM = "Bottom"
+TITLE_POSITION_LEFT = "Left"
+TITLE_POSITION_RIGHT = "Right"
+
+TITLE_DIRECTION_ACROSS = "Across"
+TITLE_DIRECTION_DOWN = "Down"
+
+_TITLE_POSITION_ALIASES = {
+    "top": TITLE_POSITION_TOP,
+    "nhltop": TITLE_POSITION_TOP,
+    "bottom": TITLE_POSITION_BOTTOM,
+    "nhlbottom": TITLE_POSITION_BOTTOM,
+    "left": TITLE_POSITION_LEFT,
+    "nhlleft": TITLE_POSITION_LEFT,
+    "right": TITLE_POSITION_RIGHT,
+    "nhlright": TITLE_POSITION_RIGHT,
+}
+
+_TITLE_DIRECTION_ALIASES = {
+    "across": TITLE_DIRECTION_ACROSS,
+    "nhlacross": TITLE_DIRECTION_ACROSS,
+    "down": TITLE_DIRECTION_DOWN,
+    "nhldown": TITLE_DIRECTION_DOWN,
+}
+
 NCL_LABELBAR_DEFAULTS: dict[str, Any] = {
     "lbLabelBarOn": True,
     "lbOrientation": ORIENTATION_VERTICAL,
@@ -26,6 +55,21 @@ NCL_LABELBAR_DEFAULTS: dict[str, Any] = {
     "lbAutoManage": True,
     "lbLabelOffsetF": 0.1,
     "lbTitleOffsetF": 0.03,
+    "lbTitleString": NCL_LABELBAR_DEFAULT_TITLE,
+    "lbTitleOn": None,
+    "lbTitlePosition": TITLE_POSITION_TOP,
+    "lbTitleExtentF": 0.15,
+    "lbTitleAngleF": 0.0,
+    "lbTitleDirection": None,
+    "lbTitleFont": 21,
+    "lbTitleFontColor": "Foreground",
+    "lbTitleJust": "CenterCenter",
+    "lbTitleFontHeightF": 0.025,
+    "lbTitleFontAspectF": 1.3125,
+    "lbTitleFontThicknessF": 1.0,
+    "lbTitleFontQuality": "High",
+    "lbTitleConstantSpacingF": 0.0,
+    "lbTitleFuncCode": "~",
     "lbLeftMarginF": 0.05,
     "lbRightMarginF": 0.05,
     "lbBottomMarginF": 0.05,
@@ -199,3 +243,39 @@ def label_alignment_for_end_style(
     if style == END_STYLE_INCLUDE_OUTER_BOXES:
         return LABEL_ALIGNMENT_INTERIOR_EDGES
     return LABEL_ALIGNMENT_EXTERNAL_EDGES
+
+def normalize_title_position(value):
+    if value is None:
+        return TITLE_POSITION_TOP
+
+    key = _norm_key(value)
+    if key not in _TITLE_POSITION_ALIASES:
+        raise ValueError(f"Unsupported lbTitlePosition: {value!r}")
+
+    return _TITLE_POSITION_ALIASES[key]
+
+
+def normalize_title_direction(value, title_position):
+    if value is not None:
+        key = _norm_key(value)
+        if key not in _TITLE_DIRECTION_ALIASES:
+            raise ValueError(f"Unsupported lbTitleDirection: {value!r}")
+        return _TITLE_DIRECTION_ALIASES[key]
+
+    if title_position in {TITLE_POSITION_LEFT, TITLE_POSITION_RIGHT}:
+        return TITLE_DIRECTION_DOWN
+
+    return TITLE_DIRECTION_ACROSS
+
+
+def _bool_from_resource_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "off", "no"}
+    return bool(value)
+
+
+def resolve_title_on(value: Any | None, title_string: Any | None) -> bool:
+    if value is not None:
+        return _bool_from_resource_value(value)
+
+    return title_string not in (None, "", NCL_LABELBAR_DEFAULT_TITLE)
