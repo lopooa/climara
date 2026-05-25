@@ -26,6 +26,7 @@ def main():
     run_if_exists("tools/smoke_cyclic_no_cartopy.py")
     run_if_exists("tools/smoke_text_bbox_guard.py")
     run_if_exists("tools/smoke_text_bbox_not_used_by_render_path.py")
+    run_if_exists("tools/smoke_labelbar_text_bbox_request_contract.py")
     run_if_exists("tools/run_labelbar_textitem_smokes.py")
 
     print("✅ core smoke bundle passed")
