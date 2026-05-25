@@ -946,14 +946,6 @@ def _render_labelbar(obj, doc, viewport=None):
             f'stroke-width="{polygon.stroke_width:.3f}" />'
         )
 
-    for line in primitives.lines:
-        doc.add(
-            f'<line x1="{line.p1.x:.3f}" y1="{line.p1.y:.3f}" '
-            f'x2="{line.p2.x:.3f}" y2="{line.p2.y:.3f}" '
-            f'stroke="{escape(_color(line.stroke))}" '
-            f'stroke-width="{line.stroke_width:.3f}" />'
-        )
-
     for title_item in getattr(primitives, "title_texts", ()):
         _render_svg_text_primitive(
             doc,
@@ -976,6 +968,14 @@ def _render_labelbar(obj, doc, viewport=None):
             font_size=font_size,
             anchor=anchor,
         )
+    for line in primitives.lines:
+        doc.add(
+            f'<line x1="{line.p1.x:.3f}" y1="{line.p1.y:.3f}" '
+            f'x2="{line.p2.x:.3f}" y2="{line.p2.y:.3f}" '
+            f'stroke="{escape(_color(line.stroke))}" '
+            f'stroke-width="{line.stroke_width:.3f}" />'
+        )
+
 
 def render_object(
     obj: Any,
