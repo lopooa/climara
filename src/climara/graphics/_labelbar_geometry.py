@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ._text_semantics import build_text_item_semantics
+
 from ._labelbar_semantics import (
     LABEL_ALIGNMENT_BOX_CENTERS,
     LABEL_ALIGNMENT_EXTERNAL_EDGES,
@@ -416,28 +418,39 @@ def _title_text_item_spec(
     if font_height <= 0.0:
         font_height = 0.025
 
-    func_code = _func_code(_pick(obj, "lbTitleFuncCode", "~"))
-    font_quality = _pick(obj, "lbTitleFontQuality", "High")
+    semantics = build_text_item_semantics(
+        placement.text,
+        direction=direction,
+        func_code=_pick(obj, "lbTitleFuncCode", "~"),
+        just=just,
+        angle=angle,
+        font=_pick(obj, "lbTitleFont", 21),
+        font_color=_pick(obj, "lbTitleFontColor", "Foreground"),
+        font_height=font_height,
+        font_aspect=_pick(obj, "lbTitleFontAspectF", 1.3125),
+        font_thickness=_pick(obj, "lbTitleFontThicknessF", 1.0),
+        font_quality=_pick(obj, "lbTitleFontQuality", "High"),
+        constant_spacing=_pick(obj, "lbTitleConstantSpacingF", 0.0),
+    )
 
     return NdcTextItemSpec(
         x=placement.x,
         y=placement.y,
-        text=placement.text,
-        real_string=_text_item_real_string(placement.text, direction, func_code),
-        direction=direction,
-        angle=angle,
-        just=just,
-        font=_pick(obj, "lbTitleFont", 21),
-        font_color=_pick(obj, "lbTitleFontColor", "Foreground"),
-        font_height=font_height,
-        font_aspect=_num(_pick(obj, "lbTitleFontAspectF", 1.3125), 1.3125),
-        font_thickness=_num(_pick(obj, "lbTitleFontThicknessF", 1.0), 1.0),
-        font_quality=font_quality,
-        quality_index=_text_quality_index(font_quality),
-        constant_spacing=_non_negative_num(_pick(obj, "lbTitleConstantSpacingF", 0.0), 0.0),
-        func_code=func_code,
+        text=semantics.text,
+        real_string=semantics.real_string,
+        direction=semantics.direction,
+        angle=semantics.angle,
+        just=semantics.just,
+        font=semantics.font,
+        font_color=semantics.font_color,
+        font_height=semantics.font_height,
+        font_aspect=semantics.font_aspect,
+        font_thickness=semantics.font_thickness,
+        font_quality=semantics.font_quality,
+        quality_index=semantics.quality_index,
+        constant_spacing=semantics.constant_spacing,
+        func_code=semantics.func_code,
     )
-
 
 
 def _build_base_geometry(
