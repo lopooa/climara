@@ -1,7 +1,6 @@
 from math import isfinite
 
 from climara.graphics._labelbar_adjust import (
-    LabelBarAdjustGeometryNotImplementedError,
     adjust_labelbar_geometry_for_text,
 )
 from climara.graphics._labelbar_adjust_bridge import (
@@ -101,13 +100,9 @@ def main():
     assert isfinite(semantics.label_pos_offset)
     assert isfinite(semantics.center_offset)
 
-    try:
-        adjust_labelbar_geometry_for_text(bundle.adjust_request)
-    except LabelBarAdjustGeometryNotImplementedError:
-        pass
-    else:
-        raise AssertionError("live LabelBar AdjustGeometry must remain guarded")
-
+    adjust_result = adjust_labelbar_geometry_for_text(bundle.adjust_request)
+    assert adjust_result.final_view_bbox.width >= 0.0
+    assert adjust_result.final_view_bbox.height >= 0.0
     print("✅ LabelBar AdjustGeometry supplied-bbox box semantics smoke passed")
 
 

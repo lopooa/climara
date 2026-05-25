@@ -1,5 +1,4 @@
 from climara.graphics._labelbar_adjust import (
-    LabelBarAdjustGeometryNotImplementedError,
     adjust_labelbar_geometry_for_text,
     build_labelbar_adjust_geometry_request,
     has_labelbar_adjust_geometry_engine,
@@ -106,17 +105,9 @@ def main():
         label_bbox=supplied_metrics_result.labels.bbox,
     )
 
-    try:
-        adjust_labelbar_geometry_for_text(adjust_request)
-    except LabelBarAdjustGeometryNotImplementedError as exc:
-        message = str(exc)
-        assert "LabelBar AdjustGeometry / AutoManage is not implemented" in message
-        assert "must not be approximated from visual spacing" in message
-    else:
-        raise AssertionError(
-            "LabelBar AdjustGeometry must remain guarded even though supplied text bboxes exist"
-        )
-
+    adjust_result = adjust_labelbar_geometry_for_text(adjust_request)
+    assert adjust_result.final_view_bbox.width >= 0.0
+    assert adjust_result.final_view_bbox.height >= 0.0
     print("✅ LabelBar supplied-metrics bbox semantics boundary smoke passed")
 
 

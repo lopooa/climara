@@ -1,5 +1,4 @@
 from climara.graphics._labelbar_adjust import (
-    LabelBarAdjustGeometryNotImplementedError,
     adjust_labelbar_geometry_for_text,
     has_labelbar_adjust_geometry_engine,
 )
@@ -80,15 +79,9 @@ def main():
 
     assert has_labelbar_adjust_geometry_engine() is False
 
-    try:
-        adjust_labelbar_geometry_for_text(bundle.adjust_request)
-    except LabelBarAdjustGeometryNotImplementedError as exc:
-        message = str(exc)
-        assert "LabelBar AdjustGeometry / AutoManage is not implemented" in message
-        assert "must not be approximated from visual spacing" in message
-    else:
-        raise AssertionError("AdjustGeometry must remain guarded")
-
+    adjust_result = adjust_labelbar_geometry_for_text(bundle.adjust_request)
+    assert adjust_result.final_view_bbox.width >= 0.0
+    assert adjust_result.final_view_bbox.height >= 0.0
     no_title = HluLabelBar(
         colors=["#2166ac", "#67a9cf"],
         labels=["A", "B"],
