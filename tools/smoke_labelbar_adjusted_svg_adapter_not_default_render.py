@@ -10,11 +10,9 @@ CHECK_FILES = [
 ]
 
 FORBIDDEN = [
-    "build_labelbar_adjust_pipeline_from_supplied_plotchar_metrics(",
-    "compute_labelbar_adjusted_geometry_from_supplied_plotchar_metrics(",
-    "LabelBarSuppliedMetricsAdjustPipeline",
-    "from ._labelbar_adjust_pipeline import",
-    "from climara.graphics._labelbar_adjust_pipeline import",
+    "labelbar_to_adjusted_svg_primitives_from_supplied_plotchar_metrics(",
+    "from ._labelbar_svg_adapter import labelbar_to_adjusted_svg_primitives_from_supplied_plotchar_metrics",
+    "from climara.graphics._labelbar_svg_adapter import labelbar_to_adjusted_svg_primitives_from_supplied_plotchar_metrics",
 ]
 
 
@@ -35,10 +33,10 @@ def main():
         for path, lineno, line in hits:
             print(f"{path}:{lineno}: {line}")
         raise AssertionError(
-            "LabelBar supplied-metrics AdjustGeometry pipeline must not be used by default render/layout paths yet."
+            "Adjusted LabelBar SVG adapter is explicit-only and must not be used by default renderer yet."
         )
 
-    print("✅ LabelBar supplied-metrics AdjustGeometry pipeline is not used by default render/layout paths")
+    print("✅ adjusted LabelBar SVG adapter is not used by default renderer")
 
 
 if __name__ == "__main__":

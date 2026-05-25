@@ -520,6 +520,107 @@ def labelbar_to_svg_primitives(
 
 
 
+def labelbar_to_adjusted_svg_primitives_from_supplied_plotchar_metrics(
+    obj: Any,
+    svg_width: float,
+    svg_height: float,
+    *,
+    title_metrics: Any | None = None,
+    label_metrics: Any = (),
+    text_perim_on: bool = False,
+    text_background_fill_on: bool = False,
+    text_perim_space: float = 0.0,
+    stroke: Any = "black",
+    text_fill: Any | None = None,
+) -> SvgLabelBarPrimitives:
+    from ._labelbar_adjust_pipeline import (
+        compute_labelbar_adjusted_geometry_from_supplied_plotchar_metrics,
+    )
+
+    geometry = compute_labelbar_adjusted_geometry_from_supplied_plotchar_metrics(
+        obj,
+        title_metrics=title_metrics,
+        label_metrics=label_metrics,
+        perim_on=text_perim_on,
+        background_fill_on=text_background_fill_on,
+        perim_space=text_perim_space,
+    )
+
+    fills = _fill_values(obj, len(compute_labelbar_box_polygons(geometry)))
+    text_values = _text_values(obj, len(geometry.label_text_positions))
+
+    resources = getattr(obj, "resources", None)
+    if not isinstance(resources, dict):
+        resources = {}
+
+    if text_fill is None:
+        text_fill = resources.get("lbLabelFontColor", "black")
+
+    label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
+    label_direction = _svg_text_direction(resources.get("lbLabelDirection", "Across"))
+    label_font_height = _resource_float(resources.get("lbLabelFontHeightF"), 0.02)
+    label_just = resources.get("lbLabelJust", "CenterCenter")
+    label_font = resources.get("lbLabelFont", 21)
+    label_font_aspect = _resource_float(resources.get("lbLabelFontAspectF"), 1.3125)
+    label_font_thickness = _resource_float(resources.get("lbLabelFontThicknessF"), 1.0)
+    label_font_quality = resources.get("lbLabelFontQuality", "High")
+    label_quality_index = _svg_text_quality_index(label_font_quality)
+    label_constant_spacing = _svg_non_negative_float(
+        resources.get("lbLabelConstantSpacingF"),
+        0.0,
+    )
+
+    box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
+    box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
+    box_line_stroke = resources.get("lbBoxLineColor", stroke)
+    box_line_stroke_width = _resource_float(resources.get("lbBoxLineThicknessF"), 0.5)
+
+    perim_on = _resource_bool(resources.get("lbPerimOn"), False)
+    perim_stroke = resources.get("lbPerimColor", stroke)
+    perim_stroke_width = _resource_float(resources.get("lbPerimThicknessF"), 0.5)
+
+    if _hollow_fill(resources.get("lbPerimFill", "HollowFill")):
+        perim_fill = "none"
+    else:
+        perim_fill = resources.get("lbPerimFillColor", "none")
+
+    geometry = replace(
+        geometry,
+        visible_label_strings=text_values,
+        label_text_positions=tuple(
+            replace(item, text=text_values[index])
+            for index, item in enumerate(geometry.label_text_positions)
+        ),
+    )
+
+    return labelbar_geometry_to_svg_primitives(
+        geometry,
+        svg_width,
+        svg_height,
+        fills=fills,
+        stroke=stroke,
+        text_fill=text_fill,
+        box_lines_on=box_lines_on,
+        box_separator_lines_on=box_separator_lines_on,
+        box_line_stroke=box_line_stroke,
+        box_line_stroke_width=box_line_stroke_width,
+        perim_on=perim_on,
+        perim_fill=perim_fill,
+        perim_stroke=perim_stroke,
+        perim_stroke_width=perim_stroke_width,
+        label_func_code=label_func_code,
+        label_direction=label_direction,
+        label_font_height=label_font_height,
+        label_just=label_just,
+        label_font=label_font,
+        label_font_aspect=label_font_aspect,
+        label_font_thickness=label_font_thickness,
+        label_font_quality=label_font_quality,
+        label_quality_index=label_quality_index,
+        label_constant_spacing=label_constant_spacing,
+    )
+
+
 __all__ = [
     "SvgLabelBarPrimitives",
     "SvgLinePrimitive",
@@ -528,6 +629,7 @@ __all__ = [
     "SvgTextPrimitive",
     "labelbar_geometry_to_svg_primitives",
     "labelbar_to_svg_primitives",
+    "labelbar_to_adjusted_svg_primitives_from_supplied_plotchar_metrics",
     "ndc_polygon_to_svg",
     "ndc_to_svg_point",
 ]
