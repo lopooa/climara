@@ -153,6 +153,16 @@ _EXPORTS = {
         "render_adjusted_labelbar_svg_from_supplied_plotchar_metrics",
         "save_adjusted_labelbar_svg_from_supplied_plotchar_metrics",
     ],
+    "._labelbar_plotchar_metrics_bundle": [
+        "LabelBarPlotcharMetricsBundle",
+        "build_labelbar_adjust_pipeline_from_plotchar_metrics_bundle",
+        "build_labelbar_plotchar_metrics_bundle",
+        "build_uniform_labelbar_plotchar_metrics_bundle",
+        "compute_labelbar_adjusted_geometry_from_plotchar_metrics_bundle",
+        "render_adjusted_labelbar_svg_from_plotchar_metrics_bundle",
+        "save_adjusted_labelbar_svg_from_plotchar_metrics_bundle",
+        "validate_labelbar_plotchar_metrics_bundle",
+    ],
     "._render_svg": [
         "SvgDocument",
         "render_object",
