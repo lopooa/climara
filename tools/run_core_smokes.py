@@ -34,6 +34,7 @@ def main():
     run_if_exists("tools/smoke_labelbar_adjust_geometry_guard.py")
     run_if_exists("tools/smoke_labelbar_adjust_geometry_not_used.py")
     run_if_exists("tools/run_labelbar_textitem_smokes.py")
+    run_if_exists("tools/run_text_bbox_smokes.py")
 
     print("✅ core smoke bundle passed")
 
