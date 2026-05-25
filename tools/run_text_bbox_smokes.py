@@ -49,6 +49,8 @@ SMOKES = [
     "tools/smoke_labelbar_adjusted_svg_export.py",
     "tools/smoke_labelbar_plotchar_metrics_bundle.py",
     "tools/smoke_labelbar_adjusted_public_api.py",
+    "tools/smoke_hlu_labelbar_adjusted_methods.py",
+    "tools/smoke_hlu_labelbar_adjusted_methods_not_default.py",
     "tools/smoke_public_plotchar_metrics_api.py",
     "tools/smoke_example_adjusted_labelbar_supplied_metrics_svg.py",
     "tools/smoke_adjusted_labelbar_example_not_default.py",

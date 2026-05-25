@@ -3,12 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from climara.graphics import (
-    HluLabelBar,
-    PlotcharExtentMetrics,
-    build_uniform_labelbar_plotchar_metrics_bundle,
-    save_adjusted_labelbar_svg_from_plotchar_metrics_bundle,
-)
+from climara.graphics import HluLabelBar, PlotcharExtentMetrics
 
 
 def build_demo_labelbar() -> HluLabelBar:
@@ -40,8 +35,7 @@ def build_demo_labelbar() -> HluLabelBar:
 def main(output_dir: str | os.PathLike[str] | None = None) -> Path:
     labelbar = build_demo_labelbar()
 
-    bundle = build_uniform_labelbar_plotchar_metrics_bundle(
-        labelbar,
+    bundle = labelbar.build_uniform_plotchar_metrics_bundle(
         title=PlotcharExtentMetrics(
             dl=0.18,
             dr=0.22,
@@ -64,8 +58,7 @@ def main(output_dir: str | os.PathLike[str] | None = None) -> Path:
 
     output_path = Path(output_dir) / "adjusted_labelbar_supplied_metrics.svg"
 
-    return save_adjusted_labelbar_svg_from_plotchar_metrics_bundle(
-        labelbar,
+    return labelbar.save_adjusted_svg_from_plotchar_metrics_bundle(
         bundle,
         output_path,
         width=900,

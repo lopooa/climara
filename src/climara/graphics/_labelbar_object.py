@@ -327,6 +327,138 @@ class HluLabelBar:
 
         return compute_labelbar_geometry(self)
 
+    def build_plotchar_metrics_bundle(
+        self,
+        *,
+        title: Any | None = None,
+        labels: Any = (),
+    ):
+        from ._labelbar_plotchar_metrics_bundle import (
+            build_labelbar_plotchar_metrics_bundle,
+        )
+
+        return build_labelbar_plotchar_metrics_bundle(
+            title=title,
+            labels=labels,
+        )
+
+    def build_uniform_plotchar_metrics_bundle(
+        self,
+        *,
+        title: Any | None = None,
+        label: Any,
+    ):
+        from ._labelbar_plotchar_metrics_bundle import (
+            build_uniform_labelbar_plotchar_metrics_bundle,
+        )
+
+        return build_uniform_labelbar_plotchar_metrics_bundle(
+            self,
+            title=title,
+            label=label,
+        )
+
+    def validate_plotchar_metrics_bundle(self, bundle: Any):
+        from ._labelbar_plotchar_metrics_bundle import (
+            validate_labelbar_plotchar_metrics_bundle,
+        )
+
+        return validate_labelbar_plotchar_metrics_bundle(self, bundle)
+
+    def build_adjust_pipeline_from_plotchar_metrics_bundle(
+        self,
+        bundle: Any,
+        *,
+        perim_on: bool = False,
+        background_fill_on: bool = False,
+        perim_space: float = 0.0,
+    ):
+        from ._labelbar_plotchar_metrics_bundle import (
+            build_labelbar_adjust_pipeline_from_plotchar_metrics_bundle,
+        )
+
+        return build_labelbar_adjust_pipeline_from_plotchar_metrics_bundle(
+            self,
+            bundle,
+            perim_on=perim_on,
+            background_fill_on=background_fill_on,
+            perim_space=perim_space,
+        )
+
+    def compute_adjusted_geometry_from_plotchar_metrics_bundle(
+        self,
+        bundle: Any,
+        *,
+        perim_on: bool = False,
+        background_fill_on: bool = False,
+        perim_space: float = 0.0,
+    ):
+        from ._labelbar_plotchar_metrics_bundle import (
+            compute_labelbar_adjusted_geometry_from_plotchar_metrics_bundle,
+        )
+
+        return compute_labelbar_adjusted_geometry_from_plotchar_metrics_bundle(
+            self,
+            bundle,
+            perim_on=perim_on,
+            background_fill_on=background_fill_on,
+            perim_space=perim_space,
+        )
+
+    def render_adjusted_svg_from_plotchar_metrics_bundle(
+        self,
+        bundle: Any,
+        *,
+        width: int = 1000,
+        height: int = 800,
+        background: str | None = "white",
+        stroke: Any = "black",
+        text_fill: Any | None = None,
+        default_label_font_height: float = 0.012,
+    ) -> str:
+        from ._labelbar_plotchar_metrics_bundle import (
+            render_adjusted_labelbar_svg_from_plotchar_metrics_bundle,
+        )
+
+        return render_adjusted_labelbar_svg_from_plotchar_metrics_bundle(
+            self,
+            bundle,
+            width=width,
+            height=height,
+            background=background,
+            stroke=stroke,
+            text_fill=text_fill,
+            default_label_font_height=default_label_font_height,
+        )
+
+    def save_adjusted_svg_from_plotchar_metrics_bundle(
+        self,
+        bundle: Any,
+        path: Any,
+        *,
+        width: int = 1000,
+        height: int = 800,
+        background: str | None = "white",
+        stroke: Any = "black",
+        text_fill: Any | None = None,
+        default_label_font_height: float = 0.012,
+    ):
+        from ._labelbar_plotchar_metrics_bundle import (
+            save_adjusted_labelbar_svg_from_plotchar_metrics_bundle,
+        )
+
+        return save_adjusted_labelbar_svg_from_plotchar_metrics_bundle(
+            self,
+            bundle,
+            path,
+            width=width,
+            height=height,
+            background=background,
+            stroke=stroke,
+            text_fill=text_fill,
+            default_label_font_height=default_label_font_height,
+        )
+
 
 def build_hlu_labelbar(
     *args: Any,
