@@ -29,7 +29,7 @@ def main():
     prim = labelbar_to_svg_primitives(obj, 1000.0, 1000.0)
 
     assert len(prim.polygons) == 4
-    assert len(prim.lines) == 3
+    assert len(prim.lines) == 7
     assert len(prim.texts) == 3
     assert prim.orientation == geom.orientation
     assert prim.label_alignment == geom.label_alignment
@@ -47,10 +47,16 @@ def main():
     )
 
     first_line = prim.lines[0]
-    close(first_line.p1.x, geom.box_locs[1] * 1000.0)
+    close(first_line.p1.x, geom.adj_bar.l * 1000.0)
     close(first_line.p1.y, (1.0 - geom.adj_bar.b) * 1000.0)
-    close(first_line.p2.x, geom.box_locs[1] * 1000.0)
-    close(first_line.p2.y, (1.0 - geom.adj_bar.t) * 1000.0)
+    close(first_line.p2.x, geom.adj_bar.r * 1000.0)
+    close(first_line.p2.y, (1.0 - geom.adj_bar.b) * 1000.0)
+
+    first_separator = prim.lines[4]
+    close(first_separator.p1.x, geom.box_locs[1] * 1000.0)
+    close(first_separator.p1.y, (1.0 - geom.adj_bar.b) * 1000.0)
+    close(first_separator.p2.x, geom.box_locs[1] * 1000.0)
+    close(first_separator.p2.y, (1.0 - geom.adj_bar.t) * 1000.0)
 
     first_text = prim.texts[0]
     assert first_text.text == "A"
@@ -71,7 +77,7 @@ def main():
     ext_prim = labelbar_to_svg_primitives(ext, 1000.0, 1000.0)
 
     assert len(ext_prim.polygons) == 4
-    assert len(ext_prim.lines) == 3
+    assert len(ext_prim.lines) == 7
     assert len(ext_prim.texts) == 5
     assert ext_prim.texts[0].text == "min"
     assert ext_prim.texts[-1].text == "max"
@@ -93,13 +99,19 @@ def main():
     vprim = labelbar_to_svg_primitives(vertical, 1000.0, 1000.0)
 
     assert len(vprim.polygons) == 3
-    assert len(vprim.lines) == 2
+    assert len(vprim.lines) == 6
     assert len(vprim.texts) == 3
     first_vline = vprim.lines[0]
     close(first_vline.p1.x, vgeom.adj_bar.l * 1000.0)
-    close(first_vline.p1.y, (1.0 - vgeom.box_locs[1]) * 1000.0)
+    close(first_vline.p1.y, (1.0 - vgeom.adj_bar.b) * 1000.0)
     close(first_vline.p2.x, vgeom.adj_bar.r * 1000.0)
-    close(first_vline.p2.y, (1.0 - vgeom.box_locs[1]) * 1000.0)
+    close(first_vline.p2.y, (1.0 - vgeom.adj_bar.b) * 1000.0)
+
+    first_vseparator = vprim.lines[4]
+    close(first_vseparator.p1.x, vgeom.adj_bar.l * 1000.0)
+    close(first_vseparator.p1.y, (1.0 - vgeom.box_locs[1]) * 1000.0)
+    close(first_vseparator.p2.x, vgeom.adj_bar.r * 1000.0)
+    close(first_vseparator.p2.y, (1.0 - vgeom.box_locs[1]) * 1000.0)
 
     assert vprim.texts[0].text == "V0"
     close(vprim.texts[0].x, vgeom.label_text_positions[0].x * 1000.0)
@@ -135,6 +147,48 @@ def main():
     legacy_lb = LegacyLbLevelsLabelBar()
     legacy_lb_prim = labelbar_to_svg_primitives(legacy_lb, 1000.0, 1000.0)
     assert [item.text for item in legacy_lb_prim.texts] == ["A", "F"]
+
+    no_separator = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("n0", "n1", "n2", "n3"),
+        labels=("N0", "N1", "N2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbBoxSeparatorLinesOn": False,
+        },
+    )
+    no_separator_prim = labelbar_to_svg_primitives(no_separator, 1000.0, 1000.0)
+    assert len(no_separator_prim.lines) == 4
+
+    no_box_lines = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("b0", "b1", "b2", "b3"),
+        labels=("B0", "B1", "B2"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbBoxLinesOn": False,
+            "lbBoxSeparatorLinesOn": True,
+        },
+    )
+    no_box_lines_prim = labelbar_to_svg_primitives(no_box_lines, 1000.0, 1000.0)
+    assert len(no_box_lines_prim.lines) == 0
+    assert all(poly.stroke == "none" for poly in no_box_lines_prim.polygons)
+
+    with_perim = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("p0", "p1"),
+        labels=("P0",),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbPerimOn": True,
+            "lbPerimColor": "red",
+            "lbPerimFill": "HollowFill",
+        },
+    )
+    with_perim_prim = labelbar_to_svg_primitives(with_perim, 1000.0, 1000.0)
+    assert len(with_perim_prim.polygons) == 3
+    assert with_perim_prim.polygons[0].stroke == "red"
+    assert with_perim_prim.polygons[0].fill == "none"
 
     print("✅ LabelBar SVG adapter smoke passed")
     print("✅ NDC LabelBar geometry converts to SVG primitive coordinates without touching renderer")

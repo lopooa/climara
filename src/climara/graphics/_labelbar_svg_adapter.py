@@ -81,6 +81,23 @@ def _sequence(value: Any | None) -> tuple[Any, ...]:
         return (value,)
 
 
+def _resource_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "off", "no"}
+    return bool(value)
+
+
+def _hollow_fill(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        key = value.strip().lower()
+        return "hollow" in key or key in {"none", "transparent", "nofill"}
+    return False
+
+
 def _fill_values(obj: Any, count: int) -> tuple[Any, ...]:
     values = getattr(obj, "fill_colors", None)
     if values is None:
@@ -127,31 +144,77 @@ def _text_values(obj: Any, count: int) -> tuple[str, ...]:
     return tuple(f"Label_{index}" for index in range(count))
 
 
-def _box_separator_lines(
-    geometry: LabelBarGeometry,
+def _line(
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
     svg_width: float,
     svg_height: float,
     stroke: Any,
-) -> tuple[SvgLinePrimitive, ...]:
-    box_locs = geometry.box_locs
+) -> SvgLinePrimitive:
+    return SvgLinePrimitive(
+        p1=ndc_to_svg_point(x1, y1, svg_width, svg_height),
+        p2=ndc_to_svg_point(x2, y2, svg_width, svg_height),
+        stroke=stroke,
+    )
 
-    if len(box_locs) <= 2:
+
+def _box_lines(
+    geometry: LabelBarGeometry,
+    svg_width: float,
+    svg_height: float,
+    *,
+    box_lines_on: bool,
+    box_separator_lines_on: bool,
+    stroke: Any,
+) -> tuple[SvgLinePrimitive, ...]:
+    if not box_lines_on:
         return ()
 
     lines: list[SvgLinePrimitive] = []
 
-    if geometry.orientation == "Horizontal":
-        for loc in box_locs[1:-1]:
-            p1 = ndc_to_svg_point(loc, geometry.adj_bar.b, svg_width, svg_height)
-            p2 = ndc_to_svg_point(loc, geometry.adj_bar.t, svg_width, svg_height)
-            lines.append(SvgLinePrimitive(p1=p1, p2=p2, stroke=stroke))
-    else:
-        for loc in box_locs[1:-1]:
-            p1 = ndc_to_svg_point(geometry.adj_bar.l, loc, svg_width, svg_height)
-            p2 = ndc_to_svg_point(geometry.adj_bar.r, loc, svg_width, svg_height)
-            lines.append(SvgLinePrimitive(p1=p1, p2=p2, stroke=stroke))
+    l = geometry.adj_bar.l
+    r = geometry.adj_bar.r
+    b = geometry.adj_bar.b
+    t = geometry.adj_bar.t
+
+    lines.append(_line(l, b, r, b, svg_width, svg_height, stroke))
+    lines.append(_line(r, b, r, t, svg_width, svg_height, stroke))
+    lines.append(_line(r, t, l, t, svg_width, svg_height, stroke))
+    lines.append(_line(l, t, l, b, svg_width, svg_height, stroke))
+
+    if box_separator_lines_on:
+        if geometry.orientation == "Horizontal":
+            for loc in geometry.box_locs[1:-1]:
+                lines.append(_line(loc, b, loc, t, svg_width, svg_height, stroke))
+        else:
+            for loc in geometry.box_locs[1:-1]:
+                lines.append(_line(l, loc, r, loc, svg_width, svg_height, stroke))
 
     return tuple(lines)
+
+
+def _perim_polygon(
+    geometry: LabelBarGeometry,
+    svg_width: float,
+    svg_height: float,
+    *,
+    fill: Any,
+    stroke: Any,
+) -> SvgPolygonPrimitive:
+    points = (
+        (geometry.perim.l, geometry.perim.b),
+        (geometry.perim.r, geometry.perim.b),
+        (geometry.perim.r, geometry.perim.t),
+        (geometry.perim.l, geometry.perim.t),
+        (geometry.perim.l, geometry.perim.b),
+    )
+    return SvgPolygonPrimitive(
+        points=ndc_polygon_to_svg(points, svg_width, svg_height),
+        fill=fill,
+        stroke=stroke,
+    )
 
 
 def labelbar_geometry_to_svg_primitives(
@@ -162,6 +225,12 @@ def labelbar_geometry_to_svg_primitives(
     fills: tuple[Any, ...] | None = None,
     stroke: Any = "black",
     text_fill: Any = "black",
+    box_lines_on: bool = True,
+    box_separator_lines_on: bool = True,
+    box_line_stroke: Any | None = None,
+    perim_on: bool = False,
+    perim_fill: Any = "none",
+    perim_stroke: Any = "black",
 ) -> SvgLabelBarPrimitives:
     ndc_polygons = compute_labelbar_box_polygons(geometry)
     polygon_count = len(ndc_polygons)
@@ -173,20 +242,38 @@ def labelbar_geometry_to_svg_primitives(
     if len(fill_values) < polygon_count:
         fill_values = fill_values + tuple(fill_values[-1] for _ in range(polygon_count - len(fill_values)))
 
-    polygons = tuple(
+    box_polygons = tuple(
         SvgPolygonPrimitive(
             points=ndc_polygon_to_svg(points, svg_width, svg_height),
             fill=fill_values[index],
-            stroke=stroke,
+            stroke="none",
         )
         for index, points in enumerate(ndc_polygons)
     )
 
-    lines = _box_separator_lines(
+    if perim_on:
+        polygons = (
+            _perim_polygon(
+                geometry,
+                svg_width,
+                svg_height,
+                fill=perim_fill,
+                stroke=perim_stroke,
+            ),
+        ) + box_polygons
+    else:
+        polygons = box_polygons
+
+    if box_line_stroke is None:
+        box_line_stroke = stroke
+
+    lines = _box_lines(
         geometry,
         svg_width,
         svg_height,
-        stroke,
+        box_lines_on=box_lines_on,
+        box_separator_lines_on=box_separator_lines_on,
+        stroke=box_line_stroke,
     )
 
     text_values = tuple(item.text for item in geometry.label_text_positions)
@@ -228,6 +315,22 @@ def labelbar_to_svg_primitives(
     fills = _fill_values(obj, len(compute_labelbar_box_polygons(geometry)))
     text_values = _text_values(obj, len(geometry.label_text_positions))
 
+    resources = getattr(obj, "resources", None)
+    if not isinstance(resources, dict):
+        resources = {}
+
+    box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
+    box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
+    box_line_stroke = resources.get("lbBoxLineColor", stroke)
+
+    perim_on = _resource_bool(resources.get("lbPerimOn"), False)
+    perim_stroke = resources.get("lbPerimColor", stroke)
+
+    if _hollow_fill(resources.get("lbPerimFill", "HollowFill")):
+        perim_fill = "none"
+    else:
+        perim_fill = resources.get("lbPerimFillColor", "none")
+
     geometry = type(geometry)(
         perim=geometry.perim,
         adj_perim=geometry.adj_perim,
@@ -263,6 +366,12 @@ def labelbar_to_svg_primitives(
         fills=fills,
         stroke=stroke,
         text_fill=text_fill,
+        box_lines_on=box_lines_on,
+        box_separator_lines_on=box_separator_lines_on,
+        box_line_stroke=box_line_stroke,
+        perim_on=perim_on,
+        perim_fill=perim_fill,
+        perim_stroke=perim_stroke,
     )
 
 
