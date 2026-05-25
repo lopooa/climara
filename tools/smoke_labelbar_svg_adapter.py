@@ -190,6 +190,35 @@ def main():
     assert with_perim_prim.polygons[0].stroke == "red"
     assert with_perim_prim.polygons[0].fill == "none"
 
+    thick_box_lines = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("t0", "t1", "t2"),
+        labels=("T0", "T1"),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbBoxLineColor": "purple",
+            "lbBoxLineThicknessF": 2.5,
+        },
+    )
+    thick_box_lines_prim = labelbar_to_svg_primitives(thick_box_lines, 1000.0, 1000.0)
+    assert thick_box_lines_prim.lines[0].stroke == "purple"
+    close(thick_box_lines_prim.lines[0].stroke_width, 2.5)
+
+    thick_perim = build_hlu_labelbar(
+        rect=(0.1, 0.8, 0.8, 0.3),
+        colors=("r0", "r1"),
+        labels=("R0",),
+        resources={
+            "EndStyle": "IncludeOuterBoxes",
+            "lbPerimOn": True,
+            "lbPerimColor": "orange",
+            "lbPerimThicknessF": 3.0,
+        },
+    )
+    thick_perim_prim = labelbar_to_svg_primitives(thick_perim, 1000.0, 1000.0)
+    assert thick_perim_prim.polygons[0].stroke == "orange"
+    close(thick_perim_prim.polygons[0].stroke_width, 3.0)
+
     print("✅ LabelBar SVG adapter smoke passed")
     print("✅ NDC LabelBar geometry converts to SVG primitive coordinates without touching renderer")
 

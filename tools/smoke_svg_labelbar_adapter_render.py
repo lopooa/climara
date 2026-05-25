@@ -16,6 +16,8 @@ def main():
         "<polygon",
         "<line",
         "<text",
+        "polygon.stroke_width",
+        "line.stroke_width",
     ]
 
     missing = [item for item in required if item not in block]

@@ -22,6 +22,7 @@ class SvgPolygonPrimitive:
     points: tuple[SvgPoint, ...]
     fill: Any
     stroke: Any
+    stroke_width: float = 0.25
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class SvgLinePrimitive:
     p1: SvgPoint
     p2: SvgPoint
     stroke: Any
+    stroke_width: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,15 @@ def _resource_bool(value: Any, default: bool) -> bool:
     if isinstance(value, str):
         return value.strip().lower() not in {"false", "0", "off", "no"}
     return bool(value)
+
+
+def _resource_float(value: Any, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except Exception:
+        return default
 
 
 def _hollow_fill(value: Any) -> bool:
@@ -152,11 +163,13 @@ def _line(
     svg_width: float,
     svg_height: float,
     stroke: Any,
+    stroke_width: float,
 ) -> SvgLinePrimitive:
     return SvgLinePrimitive(
         p1=ndc_to_svg_point(x1, y1, svg_width, svg_height),
         p2=ndc_to_svg_point(x2, y2, svg_width, svg_height),
         stroke=stroke,
+        stroke_width=stroke_width,
     )
 
 
@@ -168,6 +181,7 @@ def _box_lines(
     box_lines_on: bool,
     box_separator_lines_on: bool,
     stroke: Any,
+    stroke_width: float,
 ) -> tuple[SvgLinePrimitive, ...]:
     if not box_lines_on:
         return ()
@@ -179,18 +193,18 @@ def _box_lines(
     b = geometry.adj_bar.b
     t = geometry.adj_bar.t
 
-    lines.append(_line(l, b, r, b, svg_width, svg_height, stroke))
-    lines.append(_line(r, b, r, t, svg_width, svg_height, stroke))
-    lines.append(_line(r, t, l, t, svg_width, svg_height, stroke))
-    lines.append(_line(l, t, l, b, svg_width, svg_height, stroke))
+    lines.append(_line(l, b, r, b, svg_width, svg_height, stroke, stroke_width))
+    lines.append(_line(r, b, r, t, svg_width, svg_height, stroke, stroke_width))
+    lines.append(_line(r, t, l, t, svg_width, svg_height, stroke, stroke_width))
+    lines.append(_line(l, t, l, b, svg_width, svg_height, stroke, stroke_width))
 
     if box_separator_lines_on:
         if geometry.orientation == "Horizontal":
             for loc in geometry.box_locs[1:-1]:
-                lines.append(_line(loc, b, loc, t, svg_width, svg_height, stroke))
+                lines.append(_line(loc, b, loc, t, svg_width, svg_height, stroke, stroke_width))
         else:
             for loc in geometry.box_locs[1:-1]:
-                lines.append(_line(l, loc, r, loc, svg_width, svg_height, stroke))
+                lines.append(_line(l, loc, r, loc, svg_width, svg_height, stroke, stroke_width))
 
     return tuple(lines)
 
@@ -202,6 +216,7 @@ def _perim_polygon(
     *,
     fill: Any,
     stroke: Any,
+    stroke_width: float,
 ) -> SvgPolygonPrimitive:
     points = (
         (geometry.perim.l, geometry.perim.b),
@@ -214,6 +229,7 @@ def _perim_polygon(
         points=ndc_polygon_to_svg(points, svg_width, svg_height),
         fill=fill,
         stroke=stroke,
+        stroke_width=stroke_width,
     )
 
 
@@ -228,9 +244,11 @@ def labelbar_geometry_to_svg_primitives(
     box_lines_on: bool = True,
     box_separator_lines_on: bool = True,
     box_line_stroke: Any | None = None,
+    box_line_stroke_width: float = 0.5,
     perim_on: bool = False,
     perim_fill: Any = "none",
     perim_stroke: Any = "black",
+    perim_stroke_width: float = 0.5,
 ) -> SvgLabelBarPrimitives:
     ndc_polygons = compute_labelbar_box_polygons(geometry)
     polygon_count = len(ndc_polygons)
@@ -247,6 +265,7 @@ def labelbar_geometry_to_svg_primitives(
             points=ndc_polygon_to_svg(points, svg_width, svg_height),
             fill=fill_values[index],
             stroke="none",
+            stroke_width=0.0,
         )
         for index, points in enumerate(ndc_polygons)
     )
@@ -259,6 +278,7 @@ def labelbar_geometry_to_svg_primitives(
                 svg_height,
                 fill=perim_fill,
                 stroke=perim_stroke,
+                stroke_width=perim_stroke_width,
             ),
         ) + box_polygons
     else:
@@ -274,6 +294,7 @@ def labelbar_geometry_to_svg_primitives(
         box_lines_on=box_lines_on,
         box_separator_lines_on=box_separator_lines_on,
         stroke=box_line_stroke,
+        stroke_width=box_line_stroke_width,
     )
 
     text_values = tuple(item.text for item in geometry.label_text_positions)
@@ -322,9 +343,11 @@ def labelbar_to_svg_primitives(
     box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
     box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
     box_line_stroke = resources.get("lbBoxLineColor", stroke)
+    box_line_stroke_width = _resource_float(resources.get("lbBoxLineThicknessF"), 0.5)
 
     perim_on = _resource_bool(resources.get("lbPerimOn"), False)
     perim_stroke = resources.get("lbPerimColor", stroke)
+    perim_stroke_width = _resource_float(resources.get("lbPerimThicknessF"), 0.5)
 
     if _hollow_fill(resources.get("lbPerimFill", "HollowFill")):
         perim_fill = "none"
@@ -369,9 +392,11 @@ def labelbar_to_svg_primitives(
         box_lines_on=box_lines_on,
         box_separator_lines_on=box_separator_lines_on,
         box_line_stroke=box_line_stroke,
+        box_line_stroke_width=box_line_stroke_width,
         perim_on=perim_on,
         perim_fill=perim_fill,
         perim_stroke=perim_stroke,
+        perim_stroke_width=perim_stroke_width,
     )
 
 

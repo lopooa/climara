@@ -904,14 +904,15 @@ def _render_labelbar(obj, doc, viewport=None):
             f'<polygon points="{escape(points)}" '
             f'fill="{escape(_color(polygon.fill))}" '
             f'stroke="{escape(_color(polygon.stroke))}" '
-            f'stroke-width="0.25" />'
+            f'stroke-width="{polygon.stroke_width:.3f}" />'
         )
 
     for line in primitives.lines:
         doc.add(
             f'<line x1="{line.p1.x:.3f}" y1="{line.p1.y:.3f}" '
             f'x2="{line.p2.x:.3f}" y2="{line.p2.y:.3f}" '
-            f'stroke="{escape(_color(line.stroke))}" stroke-width="0.5" />'
+            f'stroke="{escape(_color(line.stroke))}" '
+            f'stroke-width="{line.stroke_width:.3f}" />'
         )
 
     if primitives.orientation == "Horizontal":
