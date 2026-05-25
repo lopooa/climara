@@ -6,6 +6,7 @@ from pathlib import Path
 SMOKES = [
     "tools/smoke_text_bbox_guard.py",
     "tools/smoke_ncl_text_bbox_source_map_doc.py",
+    "tools/smoke_ncl_source_requirements.py",
     "tools/smoke_no_text_bbox_heuristics.py",
     "tools/smoke_plotchar_metrics_guard.py",
     "tools/smoke_text_bbox_plotchar_bridge.py",
