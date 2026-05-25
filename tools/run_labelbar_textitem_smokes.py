@@ -7,6 +7,7 @@ SMOKES = [
     "tools/smoke_text_semantics.py",
     "tools/smoke_text_semantics_labelbar_bridge.py",
     "tools/smoke_text_semantics_shared_delegation.py",
+    "tools/smoke_text_semantics_no_drift.py",
     "tools/smoke_labelbar_title_object_semantics.py",
     "tools/smoke_labelbar_title_geometry_semantics.py",
     "tools/smoke_labelbar_title_text_geometry_semantics.py",
@@ -42,7 +43,7 @@ def main():
     for smoke in SMOKES:
         path = root / smoke
         if not path.exists():
-            print(f"SKIP missing {smoke}")
+            print(f"SKIP missing {smoke}", flush=True)
             continue
 
         print(f"RUN {smoke}", flush=True)
