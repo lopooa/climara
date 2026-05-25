@@ -9,6 +9,7 @@ from ._labelbar_semantics import (
     LABEL_ALIGNMENT_INTERIOR_EDGES,
     ORIENTATION_HORIZONTAL,
     ORIENTATION_VERTICAL,
+    NCL_LABELBAR_DEFAULT_TITLE,
     TITLE_POSITION_BOTTOM,
     TITLE_POSITION_LEFT,
     TITLE_POSITION_RIGHT,
@@ -60,6 +61,9 @@ class LabelBarGeometry:
     title_on: bool
     title_position: str
     title_offset_ndc: float
+    title_text_position: NdcTextPlacement | None
+    title_angle: float
+    title_just: str
     bar: NdcRect
     labels_area: NdcRect
     adj_bar: NdcRect
@@ -264,6 +268,77 @@ def _title_rect(
     if title_position == TITLE_POSITION_LEFT:
         return NdcRect(adj_perim.l, adj_perim.l + title_ext_ndc, adj_perim.b, adj_perim.t)
     return NdcRect(adj_perim.r - title_ext_ndc, adj_perim.r, adj_perim.b, adj_perim.t)
+
+
+
+_TITLE_JUST_ALIASES = {
+    "bottomleft": "BottomLeft",
+    "bottomcenter": "BottomCenter",
+    "bottomright": "BottomRight",
+    "centerleft": "CenterLeft",
+    "centercenter": "CenterCenter",
+    "centerright": "CenterRight",
+    "topleft": "TopLeft",
+    "topcenter": "TopCenter",
+    "topright": "TopRight",
+    "nhlbottomleft": "BottomLeft",
+    "nhlbottomcenter": "BottomCenter",
+    "nhlbottomright": "BottomRight",
+    "nhlcenterleft": "CenterLeft",
+    "nhlcentercenter": "CenterCenter",
+    "nhlcenterright": "CenterRight",
+    "nhltopleft": "TopLeft",
+    "nhltopcenter": "TopCenter",
+    "nhltopright": "TopRight",
+}
+
+
+def _normalize_title_just(value: Any | None) -> str:
+    if value is None:
+        return "CenterCenter"
+
+    key = _norm_key(value).replace("_", "")
+    if key not in _TITLE_JUST_ALIASES:
+        raise ValueError(f"Unsupported lbTitleJust: {value!r}")
+
+    return _TITLE_JUST_ALIASES[key]
+
+
+def _title_text_xy(area: NdcRect, just: str) -> tuple[float, float]:
+    if just.endswith("Left"):
+        x = area.l
+    elif just.endswith("Right"):
+        x = area.r
+    else:
+        x = area.l + area.width / 2.0
+
+    if just.startswith("Bottom"):
+        y = area.b
+    elif just.startswith("Top"):
+        y = area.t
+    else:
+        y = area.b + area.height / 2.0
+
+    return x, y
+
+
+def _resolve_title_string(obj: Any, title_on: bool) -> str:
+    value = _pick(
+        obj,
+        "lbTitleString",
+        getattr(obj, "title_string", NCL_LABELBAR_DEFAULT_TITLE),
+    )
+
+    if value is None:
+        value = NCL_LABELBAR_DEFAULT_TITLE
+
+    value = str(value)
+
+    if title_on and value == NCL_LABELBAR_DEFAULT_TITLE:
+        return str(getattr(obj, "name", "labelbar"))
+
+    return value
+
 
 
 def _build_base_geometry(
@@ -608,6 +683,22 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
     if label_angle < 0.0:
         label_angle = label_angle + 360.0
 
+    title_angle = _num(_pick(obj, "lbTitleAngleF", getattr(obj, "title_angle", 0.0)), 0.0)
+    if title_angle < 0.0:
+        title_angle = title_angle + 360.0
+
+    title_just = _normalize_title_just(_pick(obj, "lbTitleJust", "CenterCenter"))
+
+    if title_on:
+        title_x, title_y = _title_text_xy(title_area, title_just)
+        title_text_position = NdcTextPlacement(
+            x=title_x,
+            y=title_y,
+            text=_resolve_title_string(obj, title_on),
+        )
+    else:
+        title_text_position = None
+
     return LabelBarGeometry(
         perim=perim,
         adj_perim=adj_perim,
@@ -615,6 +706,9 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
         title_on=title_on,
         title_position=title_position,
         title_offset_ndc=title_offset_ndc,
+        title_text_position=title_text_position,
+        title_angle=title_angle,
+        title_just=title_just,
         bar=bar,
         labels_area=labels_area,
         adj_bar=adj_bar,
