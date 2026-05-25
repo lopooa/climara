@@ -907,6 +907,14 @@ def _svg_text_font_size(text_item, doc, default_size: float) -> float:
 
 
 def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str) -> None:
+    direction = getattr(text_item, "direction", None)
+    if direction == "Down":
+        raise NotImplementedError(
+            "NCL TextItem direction 'Down' is not yet implemented in the SVG renderer; "
+            "the TextItem real_string is preserved in the primitive layer, but the "
+            "renderer will not fake Plotchar vertical text."
+        )
+
     doc.add(
         f'<text x="{float(text_item.x):.3f}" y="{float(text_item.y):.3f}" '
         f'font-size="{font_size:.3f}" '
