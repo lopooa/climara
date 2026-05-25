@@ -9,12 +9,17 @@ from ._labelbar_semantics import (
     LABEL_ALIGNMENT_INTERIOR_EDGES,
     ORIENTATION_HORIZONTAL,
     ORIENTATION_VERTICAL,
+    TITLE_POSITION_BOTTOM,
+    TITLE_POSITION_LEFT,
+    TITLE_POSITION_RIGHT,
+    TITLE_POSITION_TOP,
     label_count_for_alignment,
     label_indices_for_stride,
     normalize_box_count,
     normalize_label_alignment,
     normalize_label_stride,
     normalize_orientation,
+    normalize_title_position,
 )
 
 
@@ -51,6 +56,10 @@ class NdcTextPlacement:
 class LabelBarGeometry:
     perim: NdcRect
     adj_perim: NdcRect
+    title_area: NdcRect
+    title_on: bool
+    title_position: str
+    title_offset_ndc: float
     bar: NdcRect
     labels_area: NdcRect
     adj_bar: NdcRect
@@ -208,7 +217,58 @@ def _visible_labels(obj: Any, count: int, indices: tuple[int, ...]) -> tuple[str
     return tuple(out)
 
 
-def _build_base_geometry(obj: Any) -> tuple[NdcRect, NdcRect, NdcRect, NdcRect, NdcSize, str, str]:
+TITLE_LOCATION_NONE = "NoTitle"
+TITLE_LOCATION_MAJOR_AXIS = "MajorAxis"
+TITLE_LOCATION_MINOR_AXIS = "MinorAxis"
+
+
+def _title_location(orientation: str, title_position: str, title_on: bool) -> str:
+    if not title_on:
+        return TITLE_LOCATION_NONE
+
+    if orientation == ORIENTATION_HORIZONTAL:
+        if title_position in {TITLE_POSITION_LEFT, TITLE_POSITION_RIGHT}:
+            return TITLE_LOCATION_MAJOR_AXIS
+        return TITLE_LOCATION_MINOR_AXIS
+
+    if title_position in {TITLE_POSITION_LEFT, TITLE_POSITION_RIGHT}:
+        return TITLE_LOCATION_MINOR_AXIS
+    return TITLE_LOCATION_MAJOR_AXIS
+
+
+def _title_rect(
+    adj_perim: NdcRect,
+    orientation: str,
+    title_position: str,
+    title_location: str,
+    title_ext_ndc: float,
+) -> NdcRect:
+    if title_location == TITLE_LOCATION_NONE:
+        return adj_perim
+
+    if orientation == ORIENTATION_HORIZONTAL:
+        if title_location == TITLE_LOCATION_MAJOR_AXIS:
+            if title_position == TITLE_POSITION_LEFT:
+                return NdcRect(adj_perim.l, adj_perim.l + title_ext_ndc, adj_perim.b, adj_perim.t)
+            return NdcRect(adj_perim.r - title_ext_ndc, adj_perim.r, adj_perim.b, adj_perim.t)
+
+        if title_position == TITLE_POSITION_BOTTOM:
+            return NdcRect(adj_perim.l, adj_perim.r, adj_perim.b, adj_perim.b + title_ext_ndc)
+        return NdcRect(adj_perim.l, adj_perim.r, adj_perim.t - title_ext_ndc, adj_perim.t)
+
+    if title_location == TITLE_LOCATION_MAJOR_AXIS:
+        if title_position == TITLE_POSITION_BOTTOM:
+            return NdcRect(adj_perim.l, adj_perim.r, adj_perim.b, adj_perim.b + title_ext_ndc)
+        return NdcRect(adj_perim.l, adj_perim.r, adj_perim.t - title_ext_ndc, adj_perim.t)
+
+    if title_position == TITLE_POSITION_LEFT:
+        return NdcRect(adj_perim.l, adj_perim.l + title_ext_ndc, adj_perim.b, adj_perim.t)
+    return NdcRect(adj_perim.r - title_ext_ndc, adj_perim.r, adj_perim.b, adj_perim.t)
+
+
+def _build_base_geometry(
+    obj: Any,
+) -> tuple[NdcRect, NdcRect, NdcRect, bool, str, float, NdcRect, NdcRect, NdcSize, str, str]:
     perim = _rect_from_view(obj)
 
     margin_l = _num(_pick(obj, "lbLeftMarginF", 0.05), 0.05)
@@ -231,66 +291,158 @@ def _build_base_geometry(obj: Any) -> tuple[NdcRect, NdcRect, NdcRect, NdcRect, 
         orientation,
     )
 
+    auto_manage = _bool(_pick(obj, "lbAutoManage", True), True)
+    title_on = _bool(_pick(obj, "lbTitleOn", False), False)
+    title_position = normalize_title_position(_pick(obj, "lbTitlePosition", None))
+    title_extent = _num(_pick(obj, "lbTitleExtentF", 0.15), 0.15)
+    title_offset = _num(_pick(obj, "lbTitleOffsetF", 0.03), 0.03)
+
+    if auto_manage and title_extent + title_offset > 0.5:
+        title_extent = 0.15
+        title_offset = 0.03
+
+    title_location = _title_location(orientation, title_position, title_on and title_extent > 0.0)
+
+    if title_location == TITLE_LOCATION_NONE:
+        title_ext_ndc = 0.0
+        title_offset_ndc = 0.0
+    elif orientation == ORIENTATION_HORIZONTAL:
+        if title_location == TITLE_LOCATION_MAJOR_AXIS:
+            title_ext_ndc = title_extent * adj_perim.width
+            title_offset_ndc = title_offset * adj_perim.width
+        else:
+            title_ext_ndc = title_extent * adj_perim.height
+            title_offset_ndc = title_offset * adj_perim.height
+    else:
+        if title_location == TITLE_LOCATION_MINOR_AXIS:
+            title_ext_ndc = title_extent * adj_perim.width
+            title_offset_ndc = title_offset * adj_perim.width
+        else:
+            title_ext_ndc = title_extent * adj_perim.height
+            title_offset_ndc = title_offset * adj_perim.height
+
+    title_area = _title_rect(
+        adj_perim,
+        orientation,
+        title_position,
+        title_location,
+        title_ext_ndc,
+    )
+
     labels_on = _bool(_pick(obj, "lbLabelsOn", True), True)
     box_minor = _clamp_resource_fraction(_pick(obj, "lbBoxMinorExtentF", 0.33), 0.33)
 
     if orientation == ORIENTATION_HORIZONTAL:
-        bar_room = adj_perim.height
+        bar_room = max(title_area.height, adj_perim.height)
         bar_ext = box_minor * bar_room
 
-        bar_l = adj_perim.l
-        bar_r = adj_perim.r
-        labels_l = bar_l
-        labels_r = bar_r
+        if title_location == TITLE_LOCATION_MINOR_AXIS and title_ext_ndc + title_offset_ndc + bar_ext > bar_room:
+            bar_ext = bar_room - title_ext_ndc - title_offset_ndc
+
+        if title_location == TITLE_LOCATION_MAJOR_AXIS:
+            if title_position == TITLE_POSITION_LEFT:
+                bar_l = adj_perim.l + title_ext_ndc + title_offset_ndc
+                bar_r = adj_perim.r
+            else:
+                bar_l = adj_perim.l
+                bar_r = adj_perim.r - title_ext_ndc - title_offset_ndc
+        else:
+            bar_l = adj_perim.l
+            bar_r = adj_perim.r
+
+        labels_l = bar_l if title_location == TITLE_LOCATION_MAJOR_AXIS else adj_perim.l
+        labels_r = bar_r if title_location == TITLE_LOCATION_MAJOR_AXIS else adj_perim.r
+
+        if title_location == TITLE_LOCATION_MINOR_AXIS:
+            if title_position == TITLE_POSITION_BOTTOM:
+                bar_b = title_area.t + title_offset_ndc
+                bar_t = adj_perim.t
+            else:
+                bar_b = adj_perim.b
+                bar_t = adj_perim.t - title_ext_ndc - title_offset_ndc
+        else:
+            bar_b = adj_perim.b
+            bar_t = adj_perim.t
 
         if (not labels_on) or label_position == "Center":
-            bar_b = adj_perim.b + (bar_room - bar_ext) / 2.0
+            bar_b = bar_b + (bar_t - bar_b - bar_ext) / 2.0
             bar_t = bar_b + bar_ext
             labels_b = bar_b
             labels_t = bar_t
         elif label_position == "Top":
-            bar_b = adj_perim.b
+            labels_t = bar_t
             bar_t = bar_b + bar_ext
             labels_b = bar_t
-            labels_t = adj_perim.t
         else:
-            bar_b = adj_perim.t - bar_ext
-            bar_t = adj_perim.t
-            labels_b = adj_perim.b
+            labels_b = bar_b
+            bar_b = bar_t - bar_ext
             labels_t = bar_b
 
         bar = NdcRect(bar_l, bar_r, bar_b, bar_t)
         labels_area = NdcRect(labels_l, labels_r, labels_b, labels_t)
 
     else:
-        bar_room = adj_perim.width
+        bar_room = max(title_area.width, adj_perim.width)
         bar_ext = box_minor * bar_room
 
-        bar_b = adj_perim.b
-        bar_t = adj_perim.t
-        labels_b = bar_b
-        labels_t = bar_t
+        if title_location == TITLE_LOCATION_MINOR_AXIS and title_ext_ndc + title_offset_ndc + bar_ext > bar_room:
+            bar_ext = bar_room - title_ext_ndc - title_offset_ndc
+
+        if title_location == TITLE_LOCATION_MAJOR_AXIS:
+            if title_position == TITLE_POSITION_BOTTOM:
+                bar_b = adj_perim.b + title_ext_ndc + title_offset_ndc
+                bar_t = adj_perim.t
+            else:
+                bar_b = adj_perim.b
+                bar_t = adj_perim.t - title_ext_ndc - title_offset_ndc
+        else:
+            bar_b = adj_perim.b
+            bar_t = adj_perim.t
+
+        labels_b = bar_b if title_location == TITLE_LOCATION_MAJOR_AXIS else adj_perim.b
+        labels_t = bar_t if title_location == TITLE_LOCATION_MAJOR_AXIS else adj_perim.t
+
+        if title_location == TITLE_LOCATION_MINOR_AXIS:
+            if title_position == TITLE_POSITION_LEFT:
+                bar_l = title_area.r + title_offset_ndc
+                bar_r = adj_perim.r
+            else:
+                bar_l = adj_perim.l
+                bar_r = adj_perim.r - title_ext_ndc - title_offset_ndc
+        else:
+            bar_l = adj_perim.l
+            bar_r = adj_perim.r
 
         if (not labels_on) or label_position == "Center":
-            bar_l = adj_perim.l + (bar_room - bar_ext) / 2.0
+            bar_l = bar_l + (bar_r - bar_l - bar_ext) / 2.0
             bar_r = bar_l + bar_ext
             labels_l = bar_l
             labels_r = bar_r
         elif label_position == "Right":
-            bar_l = adj_perim.l
+            labels_r = bar_r
             bar_r = bar_l + bar_ext
             labels_l = bar_r
-            labels_r = adj_perim.r
         else:
-            bar_l = adj_perim.r - bar_ext
-            bar_r = adj_perim.r
-            labels_l = adj_perim.l
+            labels_l = bar_l
+            bar_l = bar_r - bar_ext
             labels_r = bar_l
 
         bar = NdcRect(bar_l, bar_r, bar_b, bar_t)
         labels_area = NdcRect(labels_l, labels_r, labels_b, labels_t)
 
-    return perim, adj_perim, bar, labels_area, NdcSize(0.0, 0.0), orientation, label_position
+    return (
+        perim,
+        adj_perim,
+        title_area,
+        title_on and title_extent > 0.0,
+        title_position,
+        title_offset_ndc,
+        bar,
+        labels_area,
+        NdcSize(0.0, 0.0),
+        orientation,
+        label_position,
+    )
 
 
 def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
@@ -309,7 +461,19 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
         _pick(obj, "lbBoxEndCapStyle", "RectangleEnds"),
     )
 
-    perim, adj_perim, bar, labels_area, _, orientation, label_position = _build_base_geometry(obj)
+    (
+        perim,
+        adj_perim,
+        title_area,
+        title_on,
+        title_position,
+        title_offset_ndc,
+        bar,
+        labels_area,
+        _,
+        orientation,
+        label_position,
+    ) = _build_base_geometry(obj)
 
     if orientation == ORIENTATION_HORIZONTAL:
         box_size = NdcSize(
@@ -447,6 +611,10 @@ def compute_labelbar_geometry(obj: Any) -> LabelBarGeometry:
     return LabelBarGeometry(
         perim=perim,
         adj_perim=adj_perim,
+        title_area=title_area,
+        title_on=title_on,
+        title_position=title_position,
+        title_offset_ndc=title_offset_ndc,
         bar=bar,
         labels_area=labels_area,
         adj_bar=adj_bar,

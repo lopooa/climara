@@ -357,6 +357,10 @@ def labelbar_to_svg_primitives(
     geometry = type(geometry)(
         perim=geometry.perim,
         adj_perim=geometry.adj_perim,
+        title_area=geometry.title_area,
+        title_on=geometry.title_on,
+        title_position=geometry.title_position,
+        title_offset_ndc=geometry.title_offset_ndc,
         bar=geometry.bar,
         labels_area=geometry.labels_area,
         adj_bar=geometry.adj_bar,
