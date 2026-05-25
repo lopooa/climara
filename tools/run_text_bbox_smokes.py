@@ -47,6 +47,8 @@ SMOKES = [
     "tools/smoke_labelbar_adjust_pipeline.py",
     "tools/smoke_labelbar_adjusted_svg_adapter.py",
     "tools/smoke_labelbar_adjusted_svg_export.py",
+    "tools/smoke_labelbar_plotchar_metrics_bundle.py",
+    "tools/smoke_labelbar_plotchar_metrics_bundle_not_default.py",
     "tools/smoke_labelbar_adjusted_svg_export_not_default.py",
     "tools/smoke_labelbar_adjusted_svg_adapter_not_default_render.py",
     "tools/smoke_labelbar_adjust_pipeline_not_used.py",
