@@ -163,6 +163,20 @@ _EXPORTS = {
         "save_adjusted_labelbar_svg_from_plotchar_metrics_bundle",
         "validate_labelbar_plotchar_metrics_bundle",
     ],
+    "._plotchar_metrics": [
+        "PlotcharExtentMetrics",
+        "PlotcharMetricsRequest",
+        "build_plotchar_extent_metrics",
+        "build_plotchar_metrics_request",
+        "has_plotchar_metrics_engine",
+    ],
+    "._labelbar_adjust": [
+        "LabelBarAdjustGeometryRequest",
+        "LabelBarAdjustGeometryResult",
+        "adjust_labelbar_geometry_for_text",
+        "build_labelbar_adjust_geometry_request",
+        "has_labelbar_adjust_geometry_engine",
+    ],
     "._render_svg": [
         "SvgDocument",
         "render_object",
