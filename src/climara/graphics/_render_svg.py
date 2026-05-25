@@ -918,6 +918,31 @@ def _text_uses_plotchar_func_code(text_item) -> bool:
     return func_code in str(getattr(text_item, "text", ""))
 
 
+def _svg_text_data_attrs(text_item) -> str:
+    pairs = (
+        ("data-ncl-direction", "direction"),
+        ("data-ncl-real-string", "real_string"),
+        ("data-ncl-func-code", "func_code"),
+        ("data-ncl-just", "just"),
+        ("data-ncl-font", "font"),
+        ("data-ncl-font-height", "font_height"),
+        ("data-ncl-font-aspect", "font_aspect"),
+        ("data-ncl-font-thickness", "font_thickness"),
+        ("data-ncl-font-quality", "font_quality"),
+        ("data-ncl-quality-index", "quality_index"),
+        ("data-ncl-constant-spacing", "constant_spacing"),
+    )
+
+    attrs = []
+    for svg_name, field_name in pairs:
+        value = getattr(text_item, field_name, None)
+        if value is None:
+            continue
+        attrs.append(f' {svg_name}="{escape(str(value), quote=True)}"')
+
+    return "".join(attrs)
+
+
 def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str) -> None:
     direction = getattr(text_item, "direction", None)
     if direction not in (None, "Across"):
@@ -938,7 +963,9 @@ def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str)
         f'<text x="{float(text_item.x):.3f}" y="{float(text_item.y):.3f}" '
         f'font-size="{font_size:.3f}" '
         f'fill="{escape(_color(text_item.fill))}" '
-        f'text-anchor="{anchor}"{_svg_text_transform(text_item)}>'
+        f'text-anchor="{anchor}"'
+        f'{_svg_text_data_attrs(text_item)}'
+        f'{_svg_text_transform(text_item)}>'
         f'{escape(str(text_item.text))}</text>'
     )
 

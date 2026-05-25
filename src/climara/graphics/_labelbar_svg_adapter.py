@@ -267,10 +267,13 @@ def _title_text_primitives(
             just=item.just,
             direction=item.direction,
             font=item.font,
+            font_aspect=getattr(item, "font_aspect", None),
+            font_thickness=getattr(item, "font_thickness", None),
+            constant_spacing=getattr(item, "constant_spacing", None),
             real_string=item.real_string,
             func_code=item.func_code,
             font_quality=item.font_quality,
-            quality_index=item.quality_index,
+            quality_index=getattr(item, "quality_index", None),
         ),
     )
 
