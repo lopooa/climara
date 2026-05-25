@@ -21,6 +21,8 @@ def main():
     assert "MultiText bbox semantics from supplied child Plotchar metrics" in out
     assert "LabelBar Plotchar metrics request builder" in out
     assert "LabelBar text bbox semantics from supplied Plotchar metrics" in out
+    assert "LabelBar AdjustGeometry request bridge from supplied text bboxes" in out
+    assert "LabelBar AdjustGeometry execution from supplied text bboxes" in out
 
     assert "TextItem bbox engine using live Plotchar metrics" in out
     assert "NCL Plotchar DL / DR / DB / DT metrics engine" in out
