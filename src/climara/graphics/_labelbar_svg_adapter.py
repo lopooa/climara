@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ._labelbar_geometry import (
@@ -297,6 +297,13 @@ def _svg_text_direction(value: Any) -> str:
     return aliases[key]
 
 
+def _svg_text_real_string(text_value: Any, direction: Any, func_code: Any) -> str:
+    code = _svg_func_code(func_code)
+    normalized_direction = _svg_text_direction(direction)
+    dir_code = "D" if normalized_direction == "Down" else "A"
+    return f"{code}{dir_code}{code}{str(text_value)}"
+
+
 def labelbar_geometry_to_svg_primitives(
     geometry: LabelBarGeometry,
     svg_width: float,
@@ -363,25 +370,30 @@ def labelbar_geometry_to_svg_primitives(
         stroke_width=box_line_stroke_width,
     )
 
-    text_values = tuple(item.text for item in geometry.label_text_positions)
+    label_direction = _svg_text_direction(label_direction)
+    label_func_code = _svg_func_code(label_func_code)
 
-    texts = tuple(
-        SvgTextPrimitive(
-            x=ndc_to_svg_point(item.x, item.y, svg_width, svg_height).x,
-            y=ndc_to_svg_point(item.x, item.y, svg_width, svg_height).y,
-            text=text_values[index],
-            angle=geometry.label_angle,
-            fill=text_fill,
-            direction=label_direction,
-            func_code=label_func_code,
+    text_primitives: list[SvgTextPrimitive] = []
+    for item in geometry.label_text_positions:
+        text_value = str(item.text)
+        point = ndc_to_svg_point(item.x, item.y, svg_width, svg_height)
+        text_primitives.append(
+            SvgTextPrimitive(
+                x=point.x,
+                y=point.y,
+                text=text_value,
+                angle=geometry.label_angle,
+                fill=text_fill,
+                direction=label_direction,
+                real_string=_svg_text_real_string(text_value, label_direction, label_func_code),
+                func_code=label_func_code,
+            )
         )
-        for index, item in enumerate(geometry.label_text_positions)
-    )
 
     return SvgLabelBarPrimitives(
         polygons=polygons,
         lines=lines,
-        texts=texts,
+        texts=tuple(text_primitives),
         orientation=geometry.orientation,
         label_alignment=geometry.label_alignment,
         label_position=geometry.label_position,
@@ -412,7 +424,6 @@ def labelbar_to_svg_primitives(
     label_func_code = _svg_func_code(resources.get("lbLabelFuncCode", "~"))
     label_direction = _svg_text_direction(resources.get("lbLabelDirection", "Across"))
 
-
     box_lines_on = _resource_bool(resources.get("lbBoxLinesOn"), True)
     box_separator_lines_on = _resource_bool(resources.get("lbBoxSeparatorLinesOn"), True)
     box_line_stroke = resources.get("lbBoxLineColor", stroke)
@@ -427,41 +438,13 @@ def labelbar_to_svg_primitives(
     else:
         perim_fill = resources.get("lbPerimFillColor", "none")
 
-    geometry = type(geometry)(
-        perim=geometry.perim,
-        adj_perim=geometry.adj_perim,
-        title_area=geometry.title_area,
-        title_on=geometry.title_on,
-        title_position=geometry.title_position,
-        title_offset_ndc=geometry.title_offset_ndc,
-        title_text_position=geometry.title_text_position,
-        title_angle=geometry.title_angle,
-        title_just=geometry.title_just,
-        title_direction=geometry.title_direction,
-        title_text_item=geometry.title_text_item,
-        bar=geometry.bar,
-        labels_area=geometry.labels_area,
-        adj_bar=geometry.adj_bar,
-        box_size=geometry.box_size,
-        adj_box_size=geometry.adj_box_size,
-        box_locs=geometry.box_locs,
-        label_locs=geometry.label_locs,
-        label_const_pos=geometry.label_const_pos,
+    geometry = replace(
+        geometry,
         visible_label_strings=text_values,
         label_text_positions=tuple(
-            type(item)(x=item.x, y=item.y, text=text_values[index])
+            replace(item, text=text_values[index])
             for index, item in enumerate(geometry.label_text_positions)
         ),
-        multi_text_orientation=geometry.multi_text_orientation,
-        label_keep_end_items=geometry.label_keep_end_items,
-        label_angle=geometry.label_angle,
-        orientation=geometry.orientation,
-        label_position=geometry.label_position,
-        label_alignment=geometry.label_alignment,
-        label_stride=geometry.label_stride,
-        label_draw_count=geometry.label_draw_count,
-        box_major_extent=geometry.box_major_extent,
-        box_end_cap_style=geometry.box_end_cap_style,
     )
 
     return labelbar_geometry_to_svg_primitives(
@@ -482,6 +465,7 @@ def labelbar_to_svg_primitives(
         label_func_code=label_func_code,
         label_direction=label_direction,
     )
+
 
 
 __all__ = [
