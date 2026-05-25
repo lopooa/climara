@@ -1,5 +1,6 @@
 from climara.graphics._capabilities import graphics_capabilities
 from climara.graphics._labelbar_adjust import has_labelbar_adjust_geometry_engine
+from climara.graphics._plotchar_metrics import has_plotchar_metrics_engine
 from climara.graphics._text_bbox import has_text_bbox_engine
 
 
@@ -11,9 +12,12 @@ DONE = [
     "shared MultiText semantics helper",
     "LabelBar title TextItem semantics",
     "LabelBar label MultiText/TextItem semantics",
-    "LabelBar text bbox request builder",
     "TextBBox request / coordinate-space / union contracts",
     "MultiText child bbox aggregation contract",
+    "LabelBar text bbox request builder",
+    "Plotchar metrics request boundary",
+    "TextBBox request to Plotchar metrics bridge",
+    "LabelBar Plotchar metrics request builder",
     "guarded LabelBar AdjustGeometry boundary",
 ]
 
@@ -21,6 +25,7 @@ NOT_DONE = [
     "TextItem bbox engine",
     "MultiText bbox engine",
     "NCL Plotchar parser",
+    "NCL Plotchar DL / DR / DB / DT metrics engine",
     "NhlDOWN / Down visual text rendering",
     "NCL font metrics",
     "LabelBar AutoManage",
@@ -57,7 +62,9 @@ def main():
     print("Important guards")
     print("-" * 16)
     print(f"text_bbox_engine: {has_text_bbox_engine()}")
+    print(f"plotchar_metrics_engine: {has_plotchar_metrics_engine()}")
     print(f"labelbar_adjust_geometry_engine: {has_labelbar_adjust_geometry_engine()}")
+
     print()
     print("Recommended checks")
     print("-" * 18)

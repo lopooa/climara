@@ -10,11 +10,16 @@ def main():
 
     assert caps.text_item_semantics is True
     assert caps.multitext_semantics is True
+
+    assert caps.text_bbox_requests is True
     assert caps.labelbar_text_bbox_requests is True
+    assert caps.plotchar_metrics_requests is True
+    assert caps.labelbar_plotchar_metrics_requests is True
 
     assert caps.text_bbox_engine is False
-    assert caps.labelbar_adjust_geometry_engine is False
     assert caps.plotchar_metrics_engine is False
+    assert caps.labelbar_adjust_geometry_engine is False
+
     assert caps.plotchar_parser is False
     assert caps.down_text_rendering is False
 

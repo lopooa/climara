@@ -16,10 +16,17 @@ def main():
     assert "no Matplotlib runtime" in out
     assert "shared TextItem semantics helper" in out
     assert "LabelBar text bbox request builder" in out
+    assert "Plotchar metrics request boundary" in out
+    assert "LabelBar Plotchar metrics request builder" in out
+
     assert "TextItem bbox engine" in out
+    assert "NCL Plotchar DL / DR / DB / DT metrics engine" in out
     assert "LabelBar AdjustGeometry implementation" in out
+
     assert "text_bbox_engine: False" in out
+    assert "plotchar_metrics_engine: False" in out
     assert "labelbar_adjust_geometry_engine: False" in out
+
     assert "PYTHONPATH=src python tools/run_core_smokes.py" in out
 
     print("✅ graphics status report smoke passed")
