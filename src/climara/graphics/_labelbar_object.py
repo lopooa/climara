@@ -373,4 +373,26 @@ def build_hlu_labelbar(
     )
 
 
-__all__ = ["HluLabelBar", "build_hlu_labelbar"]
+def _merge_labelbar_resources(
+    resources: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Merge LabelBar resource dictionaries for legacy compatibility."""
+
+    merged = _as_resource_dict(resources)
+    merged.update(kwargs)
+    return merged
+
+
+def create_hlu_labelbar(*args: Any, **kwargs: Any) -> HluLabelBar:
+    """Compatibility alias for build_hlu_labelbar."""
+
+    return build_hlu_labelbar(*args, **kwargs)
+
+
+__all__ = [
+    "HluLabelBar",
+    "_merge_labelbar_resources",
+    "build_hlu_labelbar",
+    "create_hlu_labelbar",
+]

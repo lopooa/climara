@@ -1,200 +1,181 @@
-from ._legend_ndc import gsn_panel_pattern_legend_ndc
-from ._polygon import gsn_add_polygon, gsn_polygon_ndc
-from ._render_mpl import render_ndc_primitives_mpl
-from ._labelbar_object import HluLabelBar, build_hlu_labelbar
-from ._polymarker import gsn_add_polymarker, gsn_polymarker_ndc
-from ._overlay import get_plot_primitives, add_plot_primitive, render_plot_overlays_mpl, redraw_plot_overlays_mpl
-from ._primitive import HluPrimitive, HluPolyline, HluPolygon, HluMarker
-from ._polyline import gsn_add_polyline, gsn_polyline_ndc, render_plot_primitives_mpl, redraw_plot_primitives_mpl
-from ._compat import (
-    SUPPORTED_RESOURCES,
-    get_resource_compatibility,
-    list_supported_resources,
-    search_supported_resources,
-    summarize_resource_compatibility,
-    make_resource_compatibility_markdown,
-    export_resource_compatibility,
-    print_resource_compatibility_summary,
-)
-from ._resources import split_resources, resolve_contour_levels, bool_resource, merge_resources, NclResources
-from ._colors import read_rgb_colormap, get_colormap
-from ._style import ncl_style
-from ._maps import create_projection, create_map_axes, add_polar_labels, add_polar_boundary
-from ._tickmark import build_grid_locators, apply_gridliner_labels, apply_plain_axis_ticks
-from ._contour import ncl_contour_map
-from ._panel import ncl_panel_maps
-from ._hatching import add_hatching, add_stipple
-from ._labelbar import add_labelbar, gsn_labelbar
-from ._strings import add_gsn_strings
-from ._text_item import HluTextItem
-from ._ndc import gsn_create_text_ndc, gsn_text_ndc
-from ._overlay import (
-    overlay_contour,
-    overlay_filled_contour,
-    overlay_pcolormesh,
-    overlay_markers,
-    overlay_text,
-    overlay_polyline,
-    overlay_polygon,
-    overlay_rectangle,
-    overlay_vectors,
-    overlay_quiver,
-    add_contour_overlay,
-    add_filled_contour_overlay,
-    add_marker_overlay,
-    add_markers,
-    add_text_overlay,
-    add_text,
-    add_vector_overlay,
-    add_vectors,
-    add_polyline,
-    add_polygon,
-    add_rectangle,
-    overlay_stipple,
-    overlay_stippling,
-    add_stipple_overlay,
-    add_stipple,
-    add_stippling,
-    add_box,
-    add_region_box,
-)
-from ._objects import ScalarField, OverlayLayer, MapPlot, ContourMapPlot, PanelMapPlot, contour_map, panel_map, open_workstation
-from ._compat import (
-    SUPPORTED_RESOURCES,
-    list_supported_resources,
-    search_supported_resources,
-    supported_resources_to_markdown,
-    export_resource_compatibility,
-    print_supported_resources,
-)
-from ._workstation import (
-    NclWorkstation,
-    gsn_open_wks,
-    ncl_draw,
-    ncl_frame,
-    ncl_close,
-    draw,
-    frame,
-)
-from ._workflow import (
-    apply_gsn_maximize,
-    apply_gsn_draw,
-    apply_gsn_frame,
-    apply_gsn_workflow,
-)
-from ._gsn import (
-    gsn_csm_contour_map,
-    gsn_csm_contour_map_polar,
-    gsn_panel,
-    gsn_panel_maps,
-)
+"""
+climara graphics public API.
 
-__all__ = [
-    "split_resources",
-    "resolve_contour_levels",
-    "bool_resource",
-    "merge_resources",
-    "NclResources",
-    "read_rgb_colormap",
-    "get_colormap",
-    "ncl_style",
-    "create_projection",
-    "create_map_axes",
-    "add_polar_labels",
-    "add_polar_boundary",
-    "apply_plain_axis_ticks",
-    "apply_gridliner_labels",
-    "build_grid_locators",
-    "ncl_contour_map",
-    "ncl_panel_maps",
-    "add_hatching",
-    "add_stipple",
-    "add_labelbar",
-    "gsn_labelbar",
-    "add_gsn_strings",
-    "overlay_contour",
-    "overlay_filled_contour",
-    "overlay_pcolormesh",
-    "overlay_markers",
-    "overlay_text",
-    "overlay_polyline",
-    "add_rectangle",
-    "add_polygon",
-    "add_polyline",
-    "overlay_rectangle",
-    "overlay_polygon",
-    "overlay_vectors",
-    "overlay_quiver",
-    "add_contour_overlay",
-    "add_filled_contour_overlay",
-    "add_marker_overlay",
-    "add_markers",
-    "add_text_overlay",
-    "add_text",
-    "add_vector_overlay",
-    "add_vectors",
-    "add_region_box",
-    "add_box",
-    "add_stippling",
-    "add_stipple_overlay",
-    "overlay_stippling",
-    "overlay_stipple",
-    "ScalarField",
-    "MapPlot",
-    "OverlayLayer",
-    "ContourMapPlot",
-    "PanelMapPlot",
-    "open_workstation",
-    "panel_map",
-    "contour_map",
-    "SUPPORTED_RESOURCES",
-    "list_supported_resources",
-    "search_supported_resources",
-    "supported_resources_to_markdown",
-    "export_resource_compatibility",
-    "print_supported_resources",
-    "NclWorkstation",
-    "get_resource_compatibility",
-    "summarize_resource_compatibility",
-    "make_resource_compatibility_markdown",
-    "print_resource_compatibility_summary",
-    "gsn_open_wks",
-    "ncl_draw",
-    "ncl_frame",
-    "ncl_close",
-    "draw",
-    "frame",
-    "apply_gsn_workflow",
-    "apply_gsn_frame",
-    "apply_gsn_draw",
-    "apply_gsn_maximize",
-    "gsn_csm_contour_map",
-    "gsn_csm_contour_map_polar",
-    "gsn_panel",
-    "gsn_panel_maps",
-    "gsn_text_ndc",
-    "gsn_create_text_ndc",
-    "HluTextItem",
-    "HluPrimitive",
-    "HluPolyline",
-    "HluPolygon",
-    "HluMarker",
-    "gsn_add_polyline",
-    "gsn_polyline_ndc",
-    "redraw_plot_primitives_mpl",
-    "render_plot_primitives_mpl",
-    "get_plot_primitives",
-    "add_plot_primitive",
-    "render_plot_overlays_mpl",
-    "redraw_plot_overlays_mpl",
-    "gsn_add_polymarker",
-    "gsn_polymarker_ndc",
-    "HluLabelBar",
-    "build_hlu_labelbar",
-    "render_ndc_primitives_mpl",
-    "gsn_add_polygon",
-    "gsn_polygon_ndc",
-    "gsn_legend_box_ndc",
-    "gsn_panel_pattern_legend_ndc",
-]
-from ._ncl_resources import print_projection_aliases, print_resource_groups, projection_aliases, resource_groups
+The graphics package now exposes backend-neutral HLU/GSN-style objects and a
+small SVG renderer.
+"""
+
+from __future__ import annotations
+
+from importlib import import_module
+
+
+_EXPORTS = {
+    "._view": [
+        "HluView",
+        "HluBoundingBox",
+    ],
+    "._primitive": [
+        "HluPrimitive",
+        "HluPolyline",
+        "HluPolygon",
+        "HluMarker",
+    ],
+    "._text_item": [
+        "HluTextItem",
+    ],
+    "._objects": [
+        "HluObject",
+        "HluPlot",
+        "HluMapPlot",
+        "HluContourPlot",
+        "HluVectorPlot",
+        "HluPanel",
+        "ScalarField",
+        "VectorField",
+        "ContourPlot",
+        "ContourMapPlot",
+        "MapPlot",
+        "PanelPlot",
+        "as_resources",
+    ],
+    "._style": [
+        "apply_style",
+        "get_active_style",
+        "get_default_style",
+        "ncl_style",
+        "reset_style",
+        "set_style",
+    ],
+    "._colors": [
+        "HluColorMap",
+        "get_colormap",
+        "make_discrete_colormap",
+        "normalize_rgb",
+        "read_rgb_colormap",
+        "read_rgb_table",
+        "resolve_colormap",
+        "rgb_to_hex",
+    ],
+    "._workstation": [
+        "NclWorkstation",
+        "gsn_open_wks",
+        "frame",
+    ],
+    "._polyline": [
+        "gsn_add_polyline",
+        "gsn_polyline_ndc",
+    ],
+    "._polygon": [
+        "gsn_add_polygon",
+        "gsn_polygon_ndc",
+    ],
+    "._polymarker": [
+        "gsn_add_polymarker",
+        "gsn_polymarker_ndc",
+    ],
+    "._ndc": [
+        "gsn_create_text_ndc",
+        "gsn_text_ndc",
+    ],
+    "._legend_ndc": [
+        "gsn_panel_pattern_legend_ndc",
+    ],
+    "._labelbar_object": [
+        "HluLabelBar",
+        "build_hlu_labelbar",
+        "create_hlu_labelbar",
+    ],
+    "._labelbar": [
+        "add_labelbar",
+        "build_labelbar",
+        "create_labelbar",
+        "draw_labelbar",
+    ],
+    "._contour": [
+        "build_contour_plot",
+        "contour",
+        "contourf",
+        "gsn_csm_contour",
+        "gsn_csm_contour_map",
+        "ncl_contourf",
+        "pcolormesh",
+    ],
+    "._maps": [
+        "build_map_plot",
+        "create_map",
+        "gsn_csm_map",
+        "gsn_panel_maps",
+        "map_plot",
+        "ncl_panel_maps",
+        "normalize_projection",
+    ],
+    "._panel": [
+        "HluPanelItem",
+        "HluPanelLayout",
+        "build_panel",
+        "compute_gsn_panel_layout",
+        "compute_panel_rects",
+        "draw_panel",
+        "gsn_panel",
+        "ncl_panel",
+        "panel",
+    ],
+    "._hatching": [
+        "HluPatternOverlay",
+        "add_agreement_hatching",
+        "add_hatching",
+        "add_significance_hatching",
+        "build_hatch_overlay",
+    ],
+    "._tickmark": [
+        "HluTickMark",
+        "add_tickmarks",
+        "build_tickmark",
+        "build_tickmarks",
+    ],
+    "._vector": [
+        "build_vector_plot",
+        "gsn_csm_vector",
+        "gsn_csm_vector_map",
+        "vector_plot",
+    ],
+    "._strings": [
+        "add_plot_strings",
+        "build_plot_strings",
+        "create_plot_string",
+        "gsn_center_string",
+        "gsn_left_string",
+        "gsn_right_string",
+    ],
+    "._render_svg": [
+        "SvgDocument",
+        "render_object",
+        "render_svg",
+        "save_svg",
+    ],
+}
+
+
+_FAILED_IMPORTS: dict[str, str] = {}
+
+
+def _load_public_api() -> list[str]:
+    names: list[str] = []
+
+    for module_name, export_names in _EXPORTS.items():
+        try:
+            module = import_module(module_name, __name__)
+        except Exception as exc:
+            _FAILED_IMPORTS[module_name] = repr(exc)
+            continue
+
+        for export_name in export_names:
+            if hasattr(module, export_name):
+                globals()[export_name] = getattr(module, export_name)
+                names.append(export_name)
+
+    return sorted(set(names))
+
+
+__all__ = _load_public_api()
