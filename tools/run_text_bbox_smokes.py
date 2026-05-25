@@ -11,6 +11,7 @@ SMOKES = [
     "tools/smoke_multitext_bbox_request_builder.py",
     "tools/smoke_multitext_child_bbox_aggregation.py",
     "tools/smoke_labelbar_text_bbox_request_contract.py",
+    "tools/smoke_labelbar_text_bbox_request_builder.py",
     "tools/smoke_labelbar_adjust_geometry_guard.py",
     "tools/smoke_labelbar_adjust_geometry_not_used.py",
 ]
