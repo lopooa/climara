@@ -407,6 +407,14 @@ def _render_text(obj: Any, doc: SvgDocument, viewport: Rect | None = None) -> No
 
     res = _resources(obj)
 
+    func_code = res.get("txFuncCode", "~")
+    engine = str(res.get("climaraTextEngine", "")).strip().lower()
+    wants_plotchar = engine == "plotchar" or text_uses_func_code(text, func_code)
+
+    if wants_plotchar:
+        _render_plotchar_text(obj, doc, viewport)
+        return
+
     if res.get("climaraPanelFigureString") is True and viewport is not None:
         local_x, local_y, just = _panel_figure_string_position(obj, viewport)
         x = _to_global_x(local_x, doc, viewport)
@@ -430,6 +438,67 @@ def _render_text(obj: Any, doc: SvgDocument, viewport: Rect | None = None) -> No
         f'font-size="{size_px:.3f}" fill="{escape(color)}" '
         f'text-anchor="{_text_anchor(just)}"{transform}>{escape(str(text))}</text>'
     )
+
+def _ndc_to_svg_point(
+    x: float,
+    y: float,
+    doc: SvgDocument,
+) -> tuple[float, float]:
+    return float(x) * doc.width, (1.0 - float(y)) * doc.height
+
+
+def _render_plotchar_text(obj: Any, doc: SvgDocument, viewport: Rect | None = None) -> None:
+    from ._plotchar_svg_runtime import render_text_object_to_ndc_polylines
+
+    res = _resources(obj)
+    view = (0.0, 0.0, 1.0, 1.0) if viewport is None else viewport
+
+    result = render_text_object_to_ndc_polylines(
+        obj,
+        viewport=view,
+        fontcap_dir=res.get("climaraPlotcharFontcapDir"),
+    )
+
+    color = _color(_get(obj, "txFontColor", "font_color", default="black"))
+    thickness = _num(
+        _get(obj, "txFontThicknessF", "font_thickness", default=1.0),
+        1.0,
+    )
+
+    stroke_width = max(0.75, thickness)
+    rendered_points: list[tuple[float, float]] = []
+
+    for poly in result.polylines:
+        points = []
+        for px, py in poly.points:
+            sx, sy = _ndc_to_svg_point(px, py, doc)
+            rendered_points.append((sx, sy))
+            points.append(f"{sx:.3f},{sy:.3f}")
+
+        if len(points) < 2:
+            continue
+
+        data = " ".join(points)
+        doc.add(
+            f'<polyline points="{data}" fill="none" stroke="{escape(color)}" '
+            f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round" />'
+        )
+
+    if bool(res.get("climaraPlotcharBBoxOn", False)) and rendered_points:
+        xs = [point[0] for point in rendered_points]
+        ys = [point[1] for point in rendered_points]
+        left = min(xs)
+        right = max(xs)
+        top = min(ys)
+        bottom = max(ys)
+
+        bbox_color = _color(res.get("climaraPlotcharBBoxColor", "red"), "red")
+        bbox_width = _num(res.get("climaraPlotcharBBoxThicknessF", 1.0), 1.0)
+
+        doc.add(
+            f'<rect x="{left:.3f}" y="{top:.3f}" width="{right - left:.3f}" height="{bottom - top:.3f}" '
+            f'fill="none" stroke="{escape(bbox_color)}" stroke-width="{bbox_width:.3f}" />'
+        )
 
 def _render_view_box(obj: Any, doc: SvgDocument) -> None:
     rect = _get(obj, "rect", "bbox", default=None)
@@ -968,24 +1037,50 @@ def _render_svg_text_primitive(doc, text_item, *, font_size: float, anchor: str)
 
 
 
-def _render_labelbar(obj, doc, viewport=None):
+class _LabelBarGeometryView:
+    def __init__(self, source, geometry):
+        self._source = source
+        self._geometry = geometry
+
+    def compute_geometry(self):
+        return self._geometry
+
+    def __getattr__(self, name):
+        return getattr(self._source, name)
+
+
+def _labelbar_python_mainline_adjusted_primitives_if_available(obj, doc, *, stroke, text_fill):
+    from ._plotchar_python_live_engine import (
+        build_python_plotchar_mainline_metrics_provider,
+        python_plotchar_mainline_status,
+    )
+
+    status = python_plotchar_mainline_status()
+    if not status.available:
+        return None
+
+    from ._labelbar_adjust_plotchar_provider import (
+        compute_labelbar_adjusted_geometry_from_plotchar_provider_bboxes,
+    )
     from ._labelbar_svg_adapter import labelbar_to_svg_primitives
 
-    res = _resources(obj)
-
-    stroke = _color(_labelbar_pick(res, "lbPerimColor", default="black"))
-    text_fill = _color(_labelbar_pick(res, "lbLabelFontColor", default="black"))
-    font_ndc = _num(_labelbar_pick(res, "lbLabelFontHeightF", default=0.012), 0.012)
-    font_size = max(1.0, font_ndc * doc.height)
-
-    primitives = labelbar_to_svg_primitives(
+    provider = build_python_plotchar_mainline_metrics_provider()
+    geometry = compute_labelbar_adjusted_geometry_from_plotchar_provider_bboxes(
         obj,
+        provider,
+    )
+    adjusted_view = _LabelBarGeometryView(obj, geometry)
+
+    return labelbar_to_svg_primitives(
+        adjusted_view,
         doc.width,
         doc.height,
         stroke=stroke,
         text_fill=text_fill,
     )
 
+
+def _add_labelbar_svg_primitives(doc, primitives, *, font_size, anchor):
     for polygon in primitives.polygons:
         points = " ".join(
             f"{point.x:.3f},{point.y:.3f}"
@@ -998,12 +1093,56 @@ def _render_labelbar(obj, doc, viewport=None):
             f'stroke-width="{polygon.stroke_width:.3f}" />'
         )
 
-    for title_item in getattr(primitives, "title_texts", ()):
+    for title_item in getattr(primitives, "title_texts", ()): 
         _render_svg_text_primitive(
             doc,
             title_item,
             font_size=_svg_text_font_size(title_item, doc, font_size),
             anchor=_svg_title_anchor(title_item),
+        )
+
+    for text_item in primitives.texts:
+        _render_svg_text_primitive(
+            doc,
+            text_item,
+            font_size=_svg_text_font_size(text_item, doc, font_size),
+            anchor=anchor,
+        )
+
+    for line in primitives.lines:
+        doc.add(
+            f'<line x1="{line.p1.x:.3f}" y1="{line.p1.y:.3f}" '
+            f'x2="{line.p2.x:.3f}" y2="{line.p2.y:.3f}" '
+            f'stroke="{escape(_color(line.stroke))}" '
+            f'stroke-width="{line.stroke_width:.3f}" />'
+        )
+
+
+def _render_labelbar(obj, doc, viewport=None):
+    from ._labelbar_svg_adapter import labelbar_to_svg_primitives
+
+    res = _resources(obj)
+
+    stroke = _color(_labelbar_pick(res, "lbPerimColor", default="black"))
+    text_fill = _color(_labelbar_pick(res, "lbLabelFontColor", default="black"))
+    font_ndc = _num(_labelbar_pick(res, "lbLabelFontHeightF", default=0.012), 0.012)
+    font_size = max(1.0, font_ndc * doc.height)
+
+    primitives = _labelbar_python_mainline_adjusted_primitives_if_available(
+        obj,
+        doc,
+        stroke=stroke,
+        text_fill=text_fill,
+    )
+    adjusted_python_mainline = primitives is not None
+
+    if primitives is None:
+        primitives = labelbar_to_svg_primitives(
+            obj,
+            doc.width,
+            doc.height,
+            stroke=stroke,
+            text_fill=text_fill,
         )
 
     if primitives.orientation == "Horizontal":
@@ -1013,21 +1152,18 @@ def _render_labelbar(obj, doc, viewport=None):
     else:
         anchor = "start"
 
-    for text_item in primitives.texts:
-        _render_svg_text_primitive(
-            doc,
-            text_item,
-            font_size=_svg_text_font_size(text_item, doc, font_size),
-            anchor=anchor,
-        )
-    for line in primitives.lines:
-        doc.add(
-            f'<line x1="{line.p1.x:.3f}" y1="{line.p1.y:.3f}" '
-            f'x2="{line.p2.x:.3f}" y2="{line.p2.y:.3f}" '
-            f'stroke="{escape(_color(line.stroke))}" '
-            f'stroke-width="{line.stroke_width:.3f}" />'
-        )
+    if adjusted_python_mainline:
+        doc.add('<g data-climara-labelbar-render-mode="adjusted-python-plotchar">')
 
+    _add_labelbar_svg_primitives(
+        doc,
+        primitives,
+        font_size=font_size,
+        anchor=anchor,
+    )
+
+    if adjusted_python_mainline:
+        doc.add("</g>")
 
 def render_object(
     obj: Any,
