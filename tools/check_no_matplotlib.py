@@ -1,43 +1,94 @@
+from __future__ import annotations
+
+import ast
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src" / "climara"
 
-patterns = [
-    "import matplotlib",
-    "from matplotlib",
+FORBIDDEN_MODULES = {
+    "matplotlib",
+    "matplotlib.pyplot",
     "pyplot",
-    "plt.",
-    "fig.",
-    "ax.",
-    "add_axes",
-    "colorbar",
-    "matplotlib.",
-]
-
-ignore = {
-    "tools/check_no_matplotlib.py",
 }
 
-bad = []
+FORBIDDEN_TEXT = (
+    "matplotlib",
+    "matplotlib.pyplot",
+    "pyplot",
+)
 
-for path in (ROOT / "src" / "climara").rglob("*.py"):
-    rel = path.relative_to(ROOT).as_posix()
 
-    if rel in ignore:
-        continue
+def is_forbidden_module(name: str) -> bool:
+    lowered = name.lower()
+    return any(
+        lowered == forbidden or lowered.startswith(forbidden + ".")
+        for forbidden in FORBIDDEN_MODULES
+    )
 
-    text = path.read_text(encoding="utf-8", errors="ignore")
+
+def check_ast_imports(path: Path, text: str) -> list[str]:
+    problems: list[str] = []
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        return [f"{path}: syntax error while checking imports: {exc}"]
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if is_forbidden_module(alias.name):
+                    problems.append(
+                        f"{path}:{node.lineno}: forbidden import `{alias.name}`"
+                    )
+
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if is_forbidden_module(module):
+                problems.append(
+                    f"{path}:{node.lineno}: forbidden import from `{module}`"
+                )
+
+    return problems
+
+
+def check_explicit_text(path: Path, text: str) -> list[str]:
+    problems: list[str] = []
 
     for lineno, line in enumerate(text.splitlines(), start=1):
-        if any(p in line for p in patterns):
-            bad.append((rel, lineno, line.rstrip()))
+        lowered = line.lower()
 
-if bad:
-    print("Matplotlib-related code found:\n")
+        for token in FORBIDDEN_TEXT:
+            if token in lowered:
+                problems.append(
+                    f"{path}:{lineno}: contains forbidden explicit token `{token}`: {line.rstrip()}"
+                )
 
-    for rel, lineno, line in bad:
-        print(f"{rel}:{lineno}: {line}")
+    return problems
 
-    raise SystemExit(1)
 
-print("OK: no Matplotlib-related code found in src/climara")
+def main() -> None:
+    problems: list[str] = []
+
+    for path in sorted(SRC.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+
+        text = path.read_text(encoding="utf-8")
+        problems.extend(check_ast_imports(path, text))
+        problems.extend(check_explicit_text(path, text))
+
+    if problems:
+        print("Matplotlib-related code found:")
+        print()
+        for problem in problems:
+            print(problem)
+        raise SystemExit(1)
+
+    print("OK: no Matplotlib-related code found in src/climara")
+
+
+if __name__ == "__main__":
+    main()

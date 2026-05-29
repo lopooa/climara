@@ -180,6 +180,14 @@ class TextItemSemantics:
     constant_spacing: float
 
 
+def plotchar_real_size_from_text_semantics(semantics: TextItemSemantics) -> float:
+    aspect = float(semantics.font_aspect)
+    if aspect <= 0.0:
+        aspect = 1.3125
+
+    return 1.0 / aspect * float(semantics.font_height) * 1.125
+
+
 def build_text_item_semantics(
     text: Any,
     *,
@@ -246,6 +254,7 @@ __all__ = [
     "normalize_text_direction",
     "normalize_text_just",
     "normalize_text_quality",
+    "plotchar_real_size_from_text_semantics",
     "non_negative_text_float",
     "text_quality_index",
     "text_real_string",

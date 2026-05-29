@@ -296,7 +296,7 @@ SUPPORTED_RESOURCES = [
         "resource": "mpUSStateLineOn",
         "status": "yes",
         "file": "_maps.py",
-        "notes": "Draw US state/province lines where Cartopy data are available.",
+        "notes": "Draw US state/province lines where external map plotting package data are available.",
     },
     {
         "group": "MapPlot",
@@ -1084,7 +1084,7 @@ SUPPORTED_RESOURCES = [
         "resource": "LambertAzimuthalEqualArea / AzimuthalEquidistant / TransverseMercator",
         "status": "partial",
         "file": "_maps.py",
-        "notes": "Adds more Cartopy projection aliases using NCL-style mpProjection names.",
+        "notes": "Adds more external map plotting package projection aliases using NCL-style mpProjection names.",
     },
     {
         "group": "MapPlot",

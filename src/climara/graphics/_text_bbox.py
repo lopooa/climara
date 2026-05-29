@@ -46,8 +46,9 @@ class MultiTextBBoxRequest:
 
 
 def has_text_bbox_engine() -> bool:
-    return False
+    from ._plotchar_python_live_engine import has_python_plotchar_mainline_engine
 
+    return has_python_plotchar_mainline_engine()
 
 def _normalize_coordinate_space(value: str | None) -> str:
     if value is None:
@@ -127,21 +128,17 @@ def build_multitext_bbox_request_from_semantics(
 
 def compute_text_item_bbox(request: TextItemBBoxRequest) -> TextBBox:
     _normalize_coordinate_space(request.coordinate_space)
-    raise TextBBoxNotImplementedError(
-        "NCL TextItem bbox computation is not implemented in climara yet. "
-        "This requires audited TextItem.c / Plotchar / font metric semantics; "
-        "do not replace this with heuristic visual extents."
-    )
 
+    from ._plotchar_python_live_engine import compute_text_item_bbox_with_python_mainline
+
+    return compute_text_item_bbox_with_python_mainline(request)
 
 def compute_multitext_bbox(request: MultiTextBBoxRequest) -> TextBBox:
     _normalize_coordinate_space(request.coordinate_space)
-    raise TextBBoxNotImplementedError(
-        "NCL MultiText bbox computation is not implemented in climara yet. "
-        "This requires audited MultiText.c child TextItem bbox aggregation; "
-        "do not replace this with heuristic visual extents."
-    )
 
+    from ._plotchar_python_live_engine import compute_multitext_bbox_with_python_mainline
+
+    return compute_multitext_bbox_with_python_mainline(request)
 
 def build_text_bbox(
     *,

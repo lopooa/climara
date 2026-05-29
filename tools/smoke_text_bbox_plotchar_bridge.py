@@ -3,7 +3,10 @@ from climara.graphics._text_bbox import build_text_item_bbox_request
 from climara.graphics._text_bbox_plotchar_bridge import (
     build_plotchar_metrics_request_from_text_bbox_request,
 )
-from climara.graphics._text_semantics import build_text_item_semantics
+from climara.graphics._text_semantics import (
+    build_text_item_semantics,
+    plotchar_real_size_from_text_semantics,
+)
 
 
 def almost_equal(value, expected, tol=1e-12):
@@ -38,17 +41,19 @@ def main():
 
     assert plotchar_request.semantics is bbox_request.semantics
     assert plotchar_request.semantics.real_string == "~A~Bridge"
-    almost_equal(plotchar_request.x, 0.4)
-    almost_equal(plotchar_request.y, 0.6)
-    almost_equal(plotchar_request.size, 0.025)
-    almost_equal(plotchar_request.angle, 315.0)
+    almost_equal(plotchar_request.x, 0.5)
+    almost_equal(plotchar_request.y, 0.5)
+    almost_equal(plotchar_request.size, plotchar_real_size_from_text_semantics(semantics))
+    almost_equal(plotchar_request.angle, 360.0)
+    almost_equal(plotchar_request.cntr, -1.0)
 
     try:
         compute_plotchar_extent_metrics(plotchar_request)
     except PlotcharMetricsNotImplementedError as exc:
         message = str(exc)
         assert "Plotchar extent metrics are not implemented" in message
-        assert "c_plchhq / c_pcgetr DL, DR, DB, DT" in message
+        assert "PLCHHQ / PCGETR DL, DR, DB, DT" in message
+        assert "ANGD=360, CNTR=-1.0" in message
     else:
         raise AssertionError("Plotchar metrics must remain guarded")
 

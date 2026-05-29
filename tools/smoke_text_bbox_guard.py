@@ -1,7 +1,7 @@
+from climara.graphics._plotchar_state import PlotcharUnsupportedError
 from climara.graphics._text_bbox import (
-    TextBBoxNotImplementedError,
-    TextItemBBoxRequest,
     build_multitext_bbox_request,
+    build_text_item_bbox_request,
     compute_multitext_bbox,
     compute_text_item_bbox,
     has_text_bbox_engine,
@@ -19,37 +19,41 @@ def main():
         font=21,
         font_color="black",
         font_height=0.025,
+        font_quality="High",
     )
 
-    request = TextItemBBoxRequest(
-        semantics=semantics,
-        x=0.5,
-        y=0.5,
-    )
+    request = build_text_item_bbox_request(semantics, x=0.5, y=0.5)
+    assert has_text_bbox_engine() is True
 
-    assert has_text_bbox_engine() is False
-
-    try:
-        compute_text_item_bbox(request)
-    except TextBBoxNotImplementedError as exc:
-        message = str(exc)
-        assert "NCL TextItem bbox computation is not implemented" in message
-        assert "do not replace this with heuristic visual extents" in message
-    else:
-        raise AssertionError("TextItem bbox must remain guarded until NCL semantics are implemented")
+    bbox = compute_text_item_bbox(request)
+    assert bbox.width > 0.0
+    assert bbox.height > 0.0
 
     multi_request = build_multitext_bbox_request([request])
+    multi_bbox = compute_multitext_bbox(multi_request)
+    assert multi_bbox == bbox
+
+    down = build_text_item_semantics(
+        "Demo",
+        direction="Down",
+        func_code="~",
+        just="CenterCenter",
+        angle=0,
+        font=21,
+        font_color="black",
+        font_height=0.025,
+        font_quality="High",
+    )
+    down_request = build_text_item_bbox_request(down, x=0.5, y=0.5)
 
     try:
-        compute_multitext_bbox(multi_request)
-    except TextBBoxNotImplementedError as exc:
-        message = str(exc)
-        assert "NCL MultiText bbox computation is not implemented" in message
-        assert "do not replace this with heuristic visual extents" in message
+        compute_text_item_bbox(down_request)
+    except PlotcharUnsupportedError as exc:
+        assert "Down-text" in str(exc)
     else:
-        raise AssertionError("MultiText bbox must remain guarded until NCL semantics are implemented")
+        raise AssertionError("Down-text must remain guarded until NCL PLCHHQ logic is mapped")
 
-    print("✅ TextItem / MultiText bbox guard smoke passed")
+    print("✅ TextItem / MultiText Python mainline bbox guard smoke passed")
 
 
 if __name__ == "__main__":

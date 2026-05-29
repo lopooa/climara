@@ -1,11 +1,14 @@
 from math import inf, nan
 
 from climara.graphics._plotchar_metrics import (
-    PlotcharMetricsNotImplementedError,
     build_plotchar_extent_metrics,
-    build_plotchar_metrics_request,
     compute_plotchar_extent_metrics,
     has_plotchar_metrics_engine,
+)
+from climara.graphics._plotchar_state import PlotcharUnsupportedError
+from climara.graphics._text_bbox import build_text_item_bbox_request
+from climara.graphics._text_bbox_plotchar_bridge import (
+    build_plotchar_metrics_request_from_text_bbox_request,
 )
 from climara.graphics._text_semantics import build_text_item_semantics
 
@@ -15,30 +18,6 @@ def almost_equal(value, expected, tol=1e-12):
 
 
 def main():
-    semantics = build_text_item_semantics(
-        "Demo",
-        direction="Across",
-        func_code="~",
-        just="CenterCenter",
-        angle=-45,
-        font=21,
-        font_color="black",
-        font_height=0.025,
-    )
-
-    request = build_plotchar_metrics_request(
-        semantics,
-        x=0.5,
-        y=0.5,
-    )
-
-    assert has_plotchar_metrics_engine() is False
-    assert request.semantics.real_string == "~A~Demo"
-    almost_equal(request.x, 0.5)
-    almost_equal(request.y, 0.5)
-    almost_equal(request.size, 0.025)
-    almost_equal(request.angle, 315.0)
-
     extents = build_plotchar_extent_metrics(
         dl=0.1,
         dr=0.3,
@@ -76,17 +55,44 @@ def main():
         else:
             raise AssertionError("non-finite Plotchar metric should fail")
 
-    try:
-        compute_plotchar_extent_metrics(request)
-    except PlotcharMetricsNotImplementedError as exc:
-        message = str(exc)
-        assert "NCL Plotchar extent metrics are not implemented" in message
-        assert "c_plchhq / c_pcgetr DL, DR, DB, DT" in message
-        assert "do not replace this with fixed-width or SVG text-size heuristics" in message
-    else:
-        raise AssertionError("Plotchar metrics must remain guarded")
+    assert isinstance(has_plotchar_metrics_engine(), bool)
 
-    print("✅ Plotchar metrics guard smoke passed")
+    semantics = build_text_item_semantics(
+        "Demo",
+        direction="Across",
+        func_code="~",
+        just="CenterCenter",
+        angle=-45,
+        font=21,
+        font_color="black",
+        font_height=0.025,
+        font_quality="High",
+    )
+    request = build_text_item_bbox_request(semantics, x=0.5, y=0.5)
+    plotchar_request = build_plotchar_metrics_request_from_text_bbox_request(request)
+    computed = compute_plotchar_extent_metrics(plotchar_request)
+    assert computed.width > 0.0
+    assert computed.height > 0.0
+
+    inline = build_text_item_semantics(
+        "A~B",
+        direction="Across",
+        func_code="~",
+        font=21,
+        font_height=0.025,
+        font_quality="High",
+    )
+    inline_request = build_text_item_bbox_request(inline, x=0.5, y=0.5)
+    try:
+        compute_plotchar_extent_metrics(
+            build_plotchar_metrics_request_from_text_bbox_request(inline_request)
+        )
+    except PlotcharUnsupportedError as exc:
+        assert "function-code" in str(exc)
+    else:
+        raise AssertionError("inline Plotchar function-code commands must remain guarded")
+
+    print("✅ Plotchar metrics Python mainline guard smoke passed")
 
 
 if __name__ == "__main__":

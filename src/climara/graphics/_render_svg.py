@@ -11,6 +11,7 @@ outer rectangle, annotation rectangle, and data rectangle.
 
 
 from dataclasses import dataclass, field
+import math
 from html import escape
 from pathlib import Path
 from typing import Any, Sequence
@@ -447,6 +448,66 @@ def _ndc_to_svg_point(
     return float(x) * doc.width, (1.0 - float(y)) * doc.height
 
 
+
+def _plotchar_metrics_bbox_points(
+    obj: Any,
+    result: Any,
+    doc: SvgDocument,
+    viewport: Rect | None = None,
+) -> list[tuple[float, float]]:
+    view = (0.0, 0.0, 1.0, 1.0) if viewport is None else viewport
+
+    left, bottom, width, height = view
+    local_x = _num(_get(obj, "x", default=0.5), 0.5)
+    local_y = _num(_get(obj, "y", default=0.5), 0.5)
+    gx = left + local_x * width
+    gy = bottom + local_y * height
+
+    just = str(_get(obj, "txJust", "justify", default="CenterCenter")).lower()
+
+    if "left" in just:
+        anchor_u = -float(result.metrics.dl)
+    elif "right" in just:
+        anchor_u = +float(result.metrics.dr)
+    else:
+        anchor_u = 0.5 * (float(result.metrics.dr) - float(result.metrics.dl))
+
+    if "bottom" in just:
+        anchor_v = -float(result.metrics.db)
+    elif "top" in just:
+        anchor_v = +float(result.metrics.dt)
+    else:
+        anchor_v = 0.5 * (float(result.metrics.dt) - float(result.metrics.db))
+
+    angle = _num(_get(obj, "txAngleF", "angle", default=0.0), 0.0)
+    if math.isclose(angle, 360.0, abs_tol=1e-12):
+        angle = 0.0
+
+    radians = math.radians(angle)
+    coso = math.cos(radians)
+    sino = math.sin(radians)
+
+    origin_x = gx - (anchor_u * coso - anchor_v * sino)
+    origin_y = gy - (anchor_u * sino + anchor_v * coso)
+
+    offsets = [
+        (-result.metrics.dl, -result.metrics.db),
+        (+result.metrics.dr, -result.metrics.db),
+        (+result.metrics.dr, +result.metrics.dt),
+        (-result.metrics.dl, +result.metrics.dt),
+    ]
+
+    corners = [
+        (
+            origin_x + u * coso - v * sino,
+            origin_y + u * sino + v * coso,
+        )
+        for u, v in offsets
+    ]
+
+    return [_ndc_to_svg_point(x, y, doc) for x, y in corners]
+
+
 def _render_plotchar_text(obj: Any, doc: SvgDocument, viewport: Rect | None = None) -> None:
     from ._plotchar_svg_runtime import render_text_object_to_ndc_polylines
 
@@ -465,40 +526,72 @@ def _render_plotchar_text(obj: Any, doc: SvgDocument, viewport: Rect | None = No
         1.0,
     )
 
-    stroke_width = max(0.75, thickness)
+    stroke_scale = _num(res.get("climaraPlotcharStrokeWidthScale", 1.25), 1.25)
+    stroke_width = max(0.75, thickness * stroke_scale)
+
+    # NCL fontcap solid/fill behavior is not source-mapped in this Python SVG
+    # runtime yet. Do not infer closed filled contours from visual appearance.
+    # The current source-mapped renderer draws fontcap point streams as strokes.
+    fill_on = bool(res.get("climaraPlotcharFillOn", False))
+    outline_on = bool(res.get("climaraPlotcharOutlineOn", True))
+
     rendered_points: list[tuple[float, float]] = []
+    svg_segments: list[tuple[list[tuple[float, float]], bool]] = []
 
     for poly in result.polylines:
-        points = []
+        segment: list[tuple[float, float]] = []
+
         for px, py in poly.points:
             sx, sy = _ndc_to_svg_point(px, py, doc)
             rendered_points.append((sx, sy))
-            points.append(f"{sx:.3f},{sy:.3f}")
+            segment.append((sx, sy))
 
-        if len(points) < 2:
-            continue
+        if len(segment) >= 2:
+            svg_segments.append((segment, bool(getattr(poly, "fillable", False))))
 
-        data = " ".join(points)
-        doc.add(
-            f'<polyline points="{data}" fill="none" stroke="{escape(color)}" '
-            f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round" />'
-        )
+    for segment, fillable in svg_segments:
+        if fill_on and fillable and len(segment) >= 3:
+            data = " ".join(
+                [f"M {segment[0][0]:.3f} {segment[0][1]:.3f}"]
+                + [f"L {sx:.3f} {sy:.3f}" for sx, sy in segment[1:]]
+                + ["Z"]
+            )
+            doc.add(
+                f'<path d="{data}" fill="{escape(color)}" fill-rule="evenodd" stroke="none" />'
+            )
 
-    if bool(res.get("climaraPlotcharBBoxOn", False)) and rendered_points:
-        xs = [point[0] for point in rendered_points]
-        ys = [point[1] for point in rendered_points]
-        left = min(xs)
-        right = max(xs)
-        top = min(ys)
-        bottom = max(ys)
+        if (not fillable) or outline_on:
+            data = " ".join(f"{sx:.3f},{sy:.3f}" for sx, sy in segment)
+            doc.add(
+                f'<polyline points="{data}" fill="none" stroke="{escape(color)}" '
+                f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round" />'
+            )
 
+    if bool(res.get("climaraPlotcharBBoxOn", False)):
         bbox_color = _color(res.get("climaraPlotcharBBoxColor", "red"), "red")
         bbox_width = _num(res.get("climaraPlotcharBBoxThicknessF", 1.0), 1.0)
+        bbox_source = str(res.get("climaraPlotcharBBoxSource", "metrics")).strip().lower()
 
-        doc.add(
-            f'<rect x="{left:.3f}" y="{top:.3f}" width="{right - left:.3f}" height="{bottom - top:.3f}" '
-            f'fill="none" stroke="{escape(bbox_color)}" stroke-width="{bbox_width:.3f}" />'
-        )
+        if bbox_source == "rendered" and rendered_points:
+            xs = [point[0] for point in rendered_points]
+            ys = [point[1] for point in rendered_points]
+            left = min(xs)
+            right = max(xs)
+            top = min(ys)
+            bottom = max(ys)
+
+            doc.add(
+                f'<rect x="{left:.3f}" y="{top:.3f}" width="{right - left:.3f}" height="{bottom - top:.3f}" '
+                f'fill="none" stroke="{escape(bbox_color)}" stroke-width="{bbox_width:.3f}" />'
+            )
+        else:
+            corners = _plotchar_metrics_bbox_points(obj, result, doc, viewport)
+            if corners:
+                data = " ".join(f"{x:.3f},{y:.3f}" for x, y in corners + [corners[0]])
+                doc.add(
+                    f'<polyline points="{data}" fill="none" stroke="{escape(bbox_color)}" '
+                    f'stroke-width="{bbox_width:.3f}" />'
+                )
 
 def _render_view_box(obj: Any, doc: SvgDocument) -> None:
     rect = _get(obj, "rect", "bbox", default=None)

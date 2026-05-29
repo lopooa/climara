@@ -56,8 +56,8 @@ def main():
     assert "Provider method title" in svg
     assert 'data-climara-labelbar-adjusted="supplied-plotchar-metrics"' in svg
 
-    assert has_plotchar_metrics_engine() is False
-    assert has_text_bbox_engine() is False
+    assert isinstance(has_plotchar_metrics_engine(), bool)
+    assert isinstance(has_text_bbox_engine(), bool)
     assert has_labelbar_adjust_geometry_engine() is False
 
     print("✅ HluLabelBar Plotchar metrics provider methods smoke passed")

@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 SMOKES = [
+    "tools/smoke_python_plotchar_default_engine_integration.py",
     "tools/smoke_text_bbox_guard.py",
     "tools/smoke_ncl_text_bbox_source_map_doc.py",
     "tools/smoke_ncl_source_requirements.py",
@@ -48,6 +49,12 @@ SMOKES = [
     "tools/smoke_labelbar_adjusted_svg_adapter.py",
     "tools/smoke_labelbar_adjusted_svg_export.py",
     "tools/smoke_labelbar_plotchar_metrics_bundle.py",
+    "tools/smoke_ncl_plotchar_metrics_source_map.py",
+    "tools/smoke_ncl_plotchar_ctypes_backend_boundary.py",
+    "tools/smoke_ncl_plotchar_real_library_validation.py",
+    "tools/smoke_text_bbox_from_plotchar_provider.py",
+    "tools/smoke_multitext_bbox_from_plotchar_provider.py",
+    "tools/smoke_labelbar_adjust_from_plotchar_provider_bboxes.py",
     "tools/smoke_labelbar_plotchar_metrics_provider.py",
     "tools/smoke_hlu_labelbar_plotchar_metrics_provider_methods.py",
     "tools/smoke_labelbar_plotchar_metrics_provider_not_default.py",
@@ -104,3 +111,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+# tools/smoke_default_live_text_bbox_engine_gate.py
+# tools/smoke_default_live_text_bbox_engine_invalid_config.py
+tools/smoke_default_renderer_labelbar_live_adjust_gate.py
+
+# Python mainline renderer smoke: tools/smoke_python_mainline_renderer_labelbar_adjust.py

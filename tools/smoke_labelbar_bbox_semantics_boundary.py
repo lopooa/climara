@@ -9,7 +9,6 @@ from climara.graphics._labelbar_bbox_semantics import (
 from climara.graphics._labelbar_text_bbox import build_labelbar_text_bbox_requests
 from climara.graphics._plotchar_metrics import PlotcharExtentMetrics
 from climara.graphics._text_bbox import (
-    TextBBoxNotImplementedError,
     compute_multitext_bbox,
     compute_text_item_bbox,
     has_text_bbox_engine,
@@ -43,22 +42,13 @@ def main():
     almost_equal(supplied.title.bbox.width, 0.30)
     almost_equal(supplied.title.bbox.height, 0.10)
 
-    assert has_text_bbox_engine() is False
+    assert has_text_bbox_engine() is True
     assert has_labelbar_adjust_geometry_engine() is False
 
-    try:
-        compute_text_item_bbox(requests.title)
-    except TextBBoxNotImplementedError as exc:
-        assert "NCL TextItem bbox computation is not implemented" in str(exc)
-    else:
-        raise AssertionError("live TextItem bbox engine must remain guarded")
-
-    try:
-        compute_multitext_bbox(requests.labels)
-    except TextBBoxNotImplementedError as exc:
-        assert "NCL MultiText bbox computation is not implemented" in str(exc)
-    else:
-        raise AssertionError("live MultiText bbox engine must remain guarded")
+    live_title = compute_text_item_bbox(requests.title)
+    live_labels = compute_multitext_bbox(requests.labels)
+    assert live_title.width > 0.0
+    assert live_labels.width > 0.0
 
     request = build_labelbar_adjust_geometry_request(
         labelbar.compute_geometry(),
@@ -69,7 +59,7 @@ def main():
     result = adjust_labelbar_geometry_for_text(request)
     assert_adjust_result(result)
 
-    print("✅ LabelBar supplied-metrics bbox semantics boundary smoke passed")
+    print("✅ LabelBar supplied-metrics bbox and Python mainline boundary smoke passed")
 
 
 if __name__ == "__main__":

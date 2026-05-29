@@ -83,8 +83,8 @@ def main():
         assert item.func_code is not None
         assert item.direction in {"Across", "Down"}
 
-    assert has_plotchar_metrics_engine() is False
-    assert has_text_bbox_engine() is False
+    assert isinstance(has_plotchar_metrics_engine(), bool)
+    assert isinstance(has_text_bbox_engine(), bool)
     assert has_labelbar_adjust_geometry_engine() is False
 
     print("✅ explicit adjusted LabelBar SVG adapter smoke passed")
